@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decrypt a message — BetterPrivacy</title>
+<meta name="description" content="Open an encrypted BetterPrivacy message with its secret phrase. Everything decrypts in your browser — the payload never reaches any server.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="🦇 You received an encrypted message">
+<meta property="og:description" content="Encrypted with BetterPrivacy. Open the link and enter the secret phrase — it decrypts in your browser, never on a server.">
+<meta name="twitter:card" content="summary">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..750&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #050505;
+    --bg-2: #0b0d10;
+    --bg-3: #12151a;
+    --line: rgba(235, 240, 248, 0.08);
+    --line-strong: rgba(235, 240, 248, 0.16);
+    --text: #edeff2;
+    --muted: #8d949f;
+    --faint: #545b66;
+    --green: #3ba55d;
+    --green-text: #5abc7c;
+    --green-glow: rgba(59, 165, 93, 0.35);
+    --red: #ed4245;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease: ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+    display: flex; flex-direction: column;
+  }
+
+  /* film grain */
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 90; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.03;
+  }
+
+  ::selection { background: rgba(59, 165, 93, 0.3); }
+  a { color: var(--green-text); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { padding: 20px 24px; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--text); }
+  .brand:hover { text-decoration: none; }
+  .brand .tile {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
+    font-size: 13px; background: rgba(59, 165, 93, 0.14);
+    box-shadow: inset 0 0 0 1px var(--green);
+  }
+
+  main {
+    flex: 1; display: grid; place-items: center;
+    padding: 24px 24px 64px;
+  }
+  .card-wrap { width: min(560px, 100%); position: relative; }
+  /* green glow appears on successful decrypt */
+  .card-wrap::before {
+    content: ''; position: absolute; inset: -70px -90px; z-index: -1;
+    background: radial-gradient(50% 60% at 50% 50%, var(--green-glow), transparent 70%);
+    opacity: 0; filter: blur(40px);
+    transition: opacity 800ms var(--ease);
+    pointer-events: none;
+  }
+  .card-wrap.lit::before { opacity: 0.5; }
+
+  /* double-bezel shell, same as the homepage demo */
+  .shell {
+    padding: 7px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 48px 120px -40px rgba(0, 0, 0, 0.95);
+  }
+  .card {
+    background: var(--bg-2);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 13px;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    padding: 26px 26px 24px;
+  }
+
+  .card h1 { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; display: flex; align-items: center; gap: 9px; }
+  .keyid { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  .keyid b { color: var(--muted); font-weight: 500; }
+
+  .cipher-preview {
+    margin-top: 16px; padding: 12px 14px;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
+    font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--faint);
+    word-break: break-all; max-height: 92px; overflow: hidden; position: relative;
+  }
+  .cipher-preview::after {
+    content: ''; position: absolute; inset: auto 0 0; height: 34px;
+    background: linear-gradient(transparent, var(--bg));
+  }
+
+  form { margin-top: 18px; }
+  label {
+    display: block; font-size: 10px; font-weight: 650; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .row { display: flex; gap: 10px; }
+  input[type="password"], input[type="text"] {
+    flex: 1; min-width: 0;
+    background: var(--bg); border: 1px solid var(--line-strong); border-radius: 9px;
+    padding: 11px 14px; color: var(--text);
+    font-family: var(--mono); font-size: 13.5px; outline: none;
+    transition: border-color 150ms var(--ease);
+  }
+  input:focus { border-color: var(--green); }
+  button {
+    background: var(--green); color: #fff; border: none; border-radius: 9px;
+    padding: 11px 20px; font: 600 14px var(--sans); cursor: pointer;
+    transition: background-color 150ms var(--ease), transform 160ms var(--ease-out), opacity 150ms var(--ease);
+    white-space: nowrap;
+  }
+  button:hover { background: #44b467; }
+  button:active { transform: scale(0.97); }
+  button:disabled { opacity: 0.55; cursor: wait; transform: none; }
+
+  .status { margin-top: 12px; font-size: 12.5px; color: var(--faint); min-height: 1.2em; }
+  .status.err { color: var(--red); }
+
+  /* decrypted result — blur crossfade in, like the plugin */
+  .result {
+    margin-top: 18px; padding: 16px 18px;
+    background: rgba(59, 165, 93, 0.07);
+    border: 1px solid rgba(59, 165, 93, 0.35); border-radius: 10px;
+    font-size: 15px; line-height: 1.6; color: var(--green-text);
+    overflow-wrap: anywhere; white-space: pre-wrap;
+    opacity: 0; filter: blur(7px);
+    transition: opacity 420ms var(--ease), filter 420ms var(--ease);
+  }
+  .result.show { opacity: 1; filter: blur(0); }
+  .result::before { content: '🦇 '; font-size: 0.8em; opacity: 0.65; }
+  @media (prefers-reduced-motion: reduce) { .result { transition: none; } }
+  .result-tools { margin-top: 10px; display: flex; gap: 14px; align-items: center; }
+  .result-tools a, .result-tools .copy {
+    background: none; border: none; padding: 0;
+    font: 500 12.5px var(--sans); color: var(--muted); cursor: pointer;
+  }
+  .result-tools .copy:hover, .result-tools a:hover { color: var(--text); background: none; text-decoration: none; transform: none; }
+
+  .privacy-note {
+    margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 12px; line-height: 1.7; color: var(--faint);
+  }
+
+  .cta { margin-top: 18px; text-align: center; }
+  .cta a {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: 9px 18px; font-size: 13.5px; font-weight: 560;
+  }
+  .cta a:hover { color: var(--text); border-color: var(--faint); text-decoration: none; }
+
+  [hidden] { display: none !important; }
+
+  footer { padding: 20px 24px 26px; text-align: center; font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<header>
+  <a class="brand" href="/"><span class="tile">🦇</span>BetterPrivacy</a>
+</header>
+
+<main>
+  <div class="card-wrap" id="wrap">
+    <div class="shell">
+      <!-- no / malformed payload -->
+      <div class="card" id="empty" hidden>
+        <h1>🦇 Nothing to decrypt</h1>
+        <p style="margin-top:12px; color:var(--muted); font-size:14.5px;">
+          This page opens encrypted <b style="color:var(--text)">BetterPrivacy</b> messages.
+          When someone using the plugin sends an encrypted message on Discord, it looks like a
+          🦇 link pointing here — clicking it brings the scrambled payload along, and the
+          secret phrase unlocks it right in your browser.
+        </p>
+        <p style="margin-top:10px; color:var(--muted); font-size:14.5px;" id="malformed-note" hidden>
+          The link you followed carries a payload this page doesn't recognize — it may have
+          been truncated while copying. Ask the sender to copy the whole message.
+        </p>
+        <div class="cta"><a href="/#install">Get the plugin — encrypt your own channels</a></div>
+        <p class="privacy-note">
+          No accounts, no servers, no analytics. The encrypted payload travels in the URL
+          fragment (the part after #), which your browser never sends to any server — including ours.
+        </p>
+      </div>
+
+      <!-- decrypt flow -->
+      <div class="card" id="box" hidden>
+        <h1>🦇 Encrypted message</h1>
+        <p class="keyid">key fingerprint <b id="fp"></b> · AES-256-GCM · PBKDF2 ×600,000</p>
+        <div class="cipher-preview" id="preview"></div>
+
+        <form id="form">
+          <label for="phrase">Secret phrase</label>
+          <div class="row">
+            <input type="password" id="phrase" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="the phrase the sender shared with you">
+            <button type="submit" id="go">Decrypt</button>
+          </div>
+        </form>
+        <p class="status" id="status">Enter the phrase the sender gave you — outside Discord, ideally.</p>
+
+        <div class="result" id="result" hidden></div>
+        <div class="result-tools" id="tools" hidden>
+          <button class="copy" type="button" id="copy">Copy plaintext</button>
+          <a href="/#install">Get the plugin to read these inline →</a>
+        </div>
+
+        <p class="privacy-note">
+          Everything happens in this browser tab. The payload lives in the URL fragment, which is
+          never sent to any server — ours included. The phrase isn't stored, logged, or transmitted;
+          reload the page and both are gone. Received a <span style="font-family:var(--mono)">.bpenc</span>
+          file instead? Encrypted attachments currently need the plugin.
+        </p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>🦇 betterprivacy.app · client-side end-to-end encryption for Discord</footer>
+
+<script>
+  // Mirrors src/crypto/* in the plugin exactly:
+  // PBKDF2-HMAC-SHA256 ×600,000 over the phrase + 16-byte salt → 256-bit key.
+  // keyId = first 6 bytes of SHA-256(raw key bits), b64url (8 chars).
+  // AES-256-GCM, 12-byte IV. Wire fragment: #v1.<keyId>.<salt>.<iv>.<ct>
+  var ITERATIONS = 600000
+  var FRAG_RE = /^#v1\.([A-Za-z0-9_-]{8})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)$/
+
+  function b64d(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/')
+    while (s.length % 4) s += '='
+    var bin = atob(s)
+    var out = new Uint8Array(bin.length)
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+    return out
+  }
+  function b64e(bytes) {
+    var bin = ''
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  async function derive(phrase, saltB64) {
+    var salt = b64d(saltB64)
+    var pk = await crypto.subtle.importKey('raw', new TextEncoder().encode(phrase), 'PBKDF2', false, ['deriveBits'])
+    var raw = new Uint8Array(await crypto.subtle.deriveBits(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: ITERATIONS }, pk, 256))
+    var digest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw))
+    var keyId = b64e(digest.subarray(0, 6))
+    var key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt'])
+    raw.fill(0)
+    return { key: key, keyId: keyId }
+  }
+
+  var wrap = document.getElementById('wrap')
+  var empty = document.getElementById('empty')
+  var box = document.getElementById('box')
+  var statusEl = document.getElementById('status')
+  var result = document.getElementById('result')
+  var tools = document.getElementById('tools')
+  var goBtn = document.getElementById('go')
+  var phraseInput = document.getElementById('phrase')
+  var parts = null
+
+  function setStatus(msg, isErr) {
+    statusEl.textContent = msg
+    statusEl.classList.toggle('err', !!isErr)
+  }
+
+  function boot() {
+    var m = FRAG_RE.exec(location.hash)
+    if (!m) {
+      empty.hidden = false
+      box.hidden = true
+      document.getElementById('malformed-note').hidden = location.hash.length <= 1
+      return
+    }
+    parts = { keyId: m[1], salt: m[2], iv: m[3], ct: m[4] }
+    empty.hidden = true
+    box.hidden = false
+    document.getElementById('fp').textContent = parts.keyId
+    document.getElementById('preview').textContent = 'v1.' + parts.keyId + '.' + parts.salt + '.' + parts.iv + '.' + parts.ct
+    result.hidden = true
+    result.classList.remove('show')
+    tools.hidden = true
+    wrap.classList.remove('lit')
+    setStatus('Enter the phrase the sender gave you — outside Discord, ideally.')
+    phraseInput.focus()
+  }
+
+  document.getElementById('form').addEventListener('submit', async function (e) {
+    e.preventDefault()
+    if (!parts) return
+    var phrase = phraseInput.value
+    if (!phrase) { setStatus('The phrase is empty.', true); return }
+    goBtn.disabled = true
+    setStatus('Deriving the key — 600,000 rounds, takes about a second…')
+    try {
+      var d = await derive(phrase, parts.salt)
+      if (d.keyId !== parts.keyId) {
+        setStatus("That phrase doesn't fit this message (key fingerprint mismatch). Check for typos — spaces and case matter.", true)
+        return
+      }
+      var pt
+      try {
+        var buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(parts.iv) }, d.key, b64d(parts.ct))
+        pt = new TextDecoder().decode(buf)
+      } catch (_) {
+        setStatus('The phrase is right, but the message failed authentication — it was modified or truncated in transit.', true)
+        return
+      }
+      result.textContent = pt // textContent: plaintext is data, never markup
+      result.hidden = false
+      requestAnimationFrame(function () { result.classList.add('show') })
+      tools.hidden = false
+      wrap.classList.add('lit')
+      setStatus('Decrypted locally — this plaintext exists only on your screen.')
+    } catch (err) {
+      setStatus('Something went wrong while deriving the key. Try again.', true)
+    } finally {
+      goBtn.disabled = false
+    }
+  })
+
+  document.getElementById('copy').addEventListener('click', function () {
+    if (result.hidden) return
+    navigator.clipboard.writeText(result.textContent).then(function () {
+      var btn = document.getElementById('copy')
+      btn.textContent = 'Copied ✓'
+      setTimeout(function () { btn.textContent = 'Copy plaintext' }, 1500)
+    })
+  })
+
+  window.addEventListener('hashchange', boot)
+  boot()
+</script>
+
+</body>
+</html>

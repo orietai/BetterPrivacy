@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BetterPrivacy — Privacy, without leaving Discord</title>
+<meta name="description" content="Keep your servers, your friends, your memes. BetterPrivacy encrypts messages and files inside your client — Discord's servers only ever see ciphertext.">
+<link rel="canonical" href="https://betterprivacy.app/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://betterprivacy.app/">
+<meta property="og:title" content="BetterPrivacy — Privacy, without leaving Discord">
+<meta property="og:description" content="Keep your servers, your friends, your memes. Messages and files encrypt client-side with AES-256-GCM — Discord only ever sees ciphertext.">
+<meta name="twitter:card" content="summary">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..750&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #050505;
+    --bg-2: #0b0d10;
+    --bg-3: #12151a;
+    --line: rgba(235, 240, 248, 0.08);
+    --line-strong: rgba(235, 240, 248, 0.16);
+    --text: #edeff2;
+    --muted: #8d949f;
+    --faint: #545b66;
+    --green: #3ba55d;
+    --green-text: #5abc7c;
+    --green-glow: rgba(59, 165, 93, 0.35);
+    --amber: #faa61a;
+    --red: #ed4245;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --ease: ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* film grain — fixed, never intercepts, kills the flat look */
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 90; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.03;
+  }
+
+  ::selection { background: rgba(59, 165, 93, 0.3); }
+
+  a { color: var(--text); text-decoration: none; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+
+  h1, h2, h3 { font-weight: 650; letter-spacing: -0.022em; }
+
+  section { scroll-margin-top: 96px; }
+
+  /* ================= floating pill nav ================= */
+  .nav {
+    position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 80;
+    display: flex; align-items: center; gap: 4px;
+    padding: 7px 7px 7px 16px;
+    background: rgba(10, 11, 13, 0.66);
+    backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.7);
+    white-space: nowrap;
+  }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; margin-right: 14px; }
+  .brand .tile {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
+    font-size: 13px; background: rgba(59, 165, 93, 0.14);
+    box-shadow: inset 0 0 0 1px var(--green);
+  }
+  .nav a.link {
+    color: var(--muted); font-size: 13px; padding: 7px 11px; border-radius: 999px;
+    transition: color 150ms var(--ease), background-color 150ms var(--ease);
+  }
+  .nav a.link:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+  .nav a.link.active { color: var(--green-text); background: rgba(59, 165, 93, 0.10); }
+  .nav-dl {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: #fff; font-weight: 600; font-size: 13px;
+    padding: 7px 8px 7px 14px; margin-left: 8px;
+    border-radius: 999px; background: var(--green);
+    transition: background-color 150ms var(--ease), transform 160ms var(--ease-out);
+  }
+  .nav-dl:hover { background: #44b467; }
+  .nav-dl:active { transform: scale(0.97); }
+  .nav-dl .ico {
+    width: 20px; height: 20px; border-radius: 50%; background: rgba(0, 0, 0, 0.28);
+    display: grid; place-items: center; font-size: 11px;
+  }
+  @media (max-width: 720px) { .nav a.link { display: none; } .brand { margin-right: 4px; } }
+
+  /* ================= hero ================= */
+  .hero { position: relative; padding: 148px 0 96px; }
+  /* decryption-lens glyph field */
+  #lens {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    -webkit-mask-image: radial-gradient(70% 55% at 42% 34%, transparent 20%, #000 78%);
+            mask-image: radial-gradient(70% 55% at 42% 34%, transparent 20%, #000 78%);
+  }
+  .hero-grid {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 10fr);
+    gap: 60px; align-items: center;
+  }
+  @media (max-width: 900px) {
+    .hero { padding: 120px 0 72px; }
+    .hero-grid { grid-template-columns: 1fr; gap: 52px; }
+  }
+
+  .eyebrow {
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .eyebrow .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+
+  .hero-copy h1 {
+    margin-top: 22px;
+    font-size: clamp(36px, 4.6vw, 58px);
+    line-height: 1.03;
+    letter-spacing: -0.035em;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  /* redaction wipe: the key phrase starts as a censor bar, then declassifies */
+  .redact { position: relative; display: inline-block; white-space: nowrap; }
+  .redact::after {
+    content: ''; position: absolute; inset: 0.06em -0.06em 0.03em;
+    background: var(--green);
+    border-radius: 0.07em;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 900ms var(--ease-in-out) 650ms;
+  }
+  .loaded .redact::after { clip-path: inset(0 0 0 100%); }
+  @media (prefers-reduced-motion: reduce) { .redact::after { display: none; } }
+
+  .hero-copy .sub {
+    margin-top: 20px; color: var(--muted); font-size: 16.5px; line-height: 1.65;
+    max-width: 46ch;
+  }
+  .hero-copy .sub strong { color: var(--text); font-weight: 560; }
+
+  .hero-ctas { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 11px 24px; border-radius: 999px;
+    font-weight: 600; font-size: 15px; cursor: pointer; border: none;
+    font-family: var(--sans);
+    transition: transform 160ms var(--ease-out), background-color 150ms var(--ease),
+                border-color 150ms var(--ease), box-shadow 250ms var(--ease);
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-green { background: var(--green); color: #fff; padding: 8px 8px 8px 22px; }
+  .btn-green:hover { background: #44b467; box-shadow: 0 10px 40px -8px var(--green-glow); }
+  .btn-green .ico {
+    width: 32px; height: 32px; border-radius: 50%; background: rgba(0, 0, 0, 0.28);
+    display: grid; place-items: center; font-size: 14px;
+    transition: transform 200ms var(--ease-out);
+  }
+  .btn-green:hover .ico { transform: translateY(2px); }
+  .btn-quiet { background: transparent; color: var(--muted); border: 1px solid var(--line-strong); }
+  .btn-quiet:hover { color: var(--text); border-color: var(--faint); }
+
+  /* at-a-glance facts */
+  .facts {
+    list-style: none;
+    margin-top: 36px; padding-top: 26px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px 32px;
+  }
+  @media (max-width: 480px) { .facts { grid-template-columns: 1fr; } }
+  .facts b { display: block; font-size: 13.5px; font-weight: 620; }
+  .facts span { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; line-height: 1.55; }
+  .facts code { font-family: var(--mono); font-size: 11px; }
+
+  /* mono status line — decodes on load */
+  .hero-note {
+    margin-top: 26px; font-family: var(--mono); font-size: 11.5px; color: var(--faint);
+    letter-spacing: 0.02em; min-height: 1.6em;
+  }
+  .hero-note .caret {
+    display: inline-block; width: 7px; height: 12px; margin-left: 4px;
+    background: var(--green); vertical-align: -2px;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .hero-note .caret { animation: none; } }
+
+  /* load-in: copy first, illustration trails */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-copy, .hero-demo {
+      transition: opacity 700ms var(--ease-out), transform 700ms var(--ease-out);
+      @starting-style { opacity: 0; transform: translateY(16px); }
+    }
+    .hero-demo { transition-delay: 150ms; }
+  }
+
+  /* ================= the living illustration ================= */
+  .demo { position: relative; }
+
+  /* the scene lights up when decrypted — darkness → green life */
+  .demo::before {
+    content: ''; position: absolute; inset: -90px -110px; z-index: -1;
+    background: radial-gradient(50% 60% at 50% 50%, var(--green-glow), transparent 70%);
+    opacity: 0; filter: blur(44px);
+    transition: opacity 800ms var(--ease);
+    pointer-events: none;
+  }
+  .demo.lit::before { opacity: 0.45; }
+
+  /* double-bezel: glass plate sitting in a machined tray */
+  .shell {
+    padding: 7px;
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    box-shadow: 0 48px 120px -40px rgba(0, 0, 0, 0.95);
+  }
+  .chat {
+    position: relative;
+    background: var(--bg-2);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 13px;
+    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+  }
+  .chat-top {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 16px; border-bottom: 1px solid var(--line);
+    font-size: 13px; color: var(--muted); font-weight: 600;
+  }
+  .chat-top .enc-tag {
+    margin-left: auto; font-family: var(--mono); font-size: 9.5px; font-weight: 400;
+    color: var(--faint);
+    border: 1px solid var(--line); border-radius: 5px; padding: 3px 8px;
+    transition: color 400ms var(--ease), border-color 400ms var(--ease);
+  }
+  .chat.armed .chat-top .enc-tag { color: var(--green-text); border-color: rgba(59, 165, 93, 0.45); }
+
+  .chat-msgs { padding: 16px 16px 4px; min-height: 208px; }
+  .msg { display: flex; gap: 12px; padding-bottom: 16px; }
+  .msg[hidden] { display: none; }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: grid; place-items: center;
+    font-size: 11.5px; font-weight: 650; color: var(--bg);
+  }
+  .avatar.a1 { background: #7b8494; }
+  .avatar.a2 { background: #6f9c81; }
+  .msg-body { min-width: 0; flex: 1; }
+  .meta { font-size: 13px; font-weight: 600; }
+  .meta time { color: var(--faint); font-size: 10px; font-weight: 400; margin-left: 8px; }
+
+  /* new message slides into the list */
+  .msg-new { opacity: 0; transform: translateY(8px); }
+  .msg-new.in {
+    opacity: 1; transform: none;
+    transition: opacity 400ms var(--ease-out), transform 400ms var(--ease-out);
+  }
+
+  /* cipher and plaintext share one grid cell; decrypting is a blur crossfade */
+  .stack { display: grid; margin-top: 3px; }
+  .stack > span {
+    grid-area: 1 / 1;
+    transition: opacity 420ms var(--ease), filter 420ms var(--ease);
+  }
+  .cipher {
+    font-family: var(--mono); font-size: 10.5px; line-height: 1.75;
+    color: var(--faint); word-break: break-all;
+  }
+  .plain { font-size: 14px; line-height: 1.55; color: var(--green-text); align-self: start; }
+  .plain::before { content: '🦇 '; font-size: 0.8em; opacity: 0.65; }
+  .plain { opacity: 0; filter: blur(7px); pointer-events: none; }
+  .msg.dec .plain { opacity: 1; filter: blur(0); }
+  .msg.dec .cipher { opacity: 0; filter: blur(7px); }
+
+  .inputbar {
+    display: flex; align-items: center; gap: 10px;
+    margin: 2px 13px 13px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 9px; padding: 9px 8px 9px 14px;
+    font-size: 13.5px;
+  }
+  .inputbar .itype { color: var(--text); white-space: nowrap; overflow: hidden; }
+  .inputbar .itype:empty::before { content: 'Message #stargazing'; color: var(--faint); }
+  .inputbar .icaret {
+    width: 1.5px; height: 15px; background: var(--muted); flex-shrink: 0;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .inputbar .icaret { animation: none; } }
+  .inputbar .spacer { flex: 1; }
+  .bat {
+    font-size: 16px; line-height: 1; padding: 6px 8px;
+    background: transparent; border: none; border-radius: 7px;
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    transition: box-shadow 300ms var(--ease), background-color 300ms var(--ease),
+                transform 160ms var(--ease-out);
+  }
+  .bat.pressed { transform: scale(0.88); }
+  .chat.armed .bat {
+    background: rgba(59, 165, 93, 0.16);
+    box-shadow: inset 0 0 0 1px var(--green);
+  }
+
+  /* the illustration's own cursor */
+  .fxc {
+    position: absolute; top: 0; left: 0; z-index: 6;
+    width: 15px; height: 15px; margin: -7.5px 0 0 -7.5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+    opacity: 0; pointer-events: none;
+    transform: translate(200px, 200px);
+    transition: transform 700ms var(--ease-in-out), opacity 250ms var(--ease);
+  }
+
+  /* phrase overlay — the plugin's one modal, re-enacted */
+  .phrase-card {
+    position: absolute; inset: 0; z-index: 5;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    backdrop-filter: blur(7px);
+    opacity: 1;
+    transition: opacity 300ms var(--ease);
+  }
+  .phrase-card[hidden] { display: none; }
+  .phrase-card.leaving { opacity: 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    .phrase-card { @starting-style { opacity: 0; } }
+  }
+  .phrase-box {
+    width: min(320px, 84%);
+    background: var(--bg-3); border: 1px solid var(--line-strong);
+    border-radius: 12px; padding: 17px 17px 15px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+    transition: transform 300ms var(--ease-out), opacity 300ms var(--ease-out);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .phrase-box { @starting-style { transform: scale(0.95); opacity: 0; } }
+  }
+  .phrase-box label {
+    display: block; font-size: 10px; font-weight: 650; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+  }
+  .phrase-input {
+    display: flex; align-items: center;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 12px; min-height: 38px;
+    font-family: var(--mono); font-size: 12.5px; color: var(--text);
+  }
+  .phrase-input .caret2 {
+    width: 7px; height: 14px; margin-left: 3px; background: var(--green); flex-shrink: 0;
+    animation: blink 1.1s steps(1) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .phrase-input .caret2 { animation: none; } }
+  .phrase-box small { display: block; margin-top: 9px; color: var(--faint); font-size: 11px; }
+
+  .demo-hint {
+    margin-top: 16px; font-size: 13px; color: var(--muted); min-height: 40px;
+    line-height: 1.5; max-width: 46ch;
+  }
+  .demo-hint::before { content: '↳ '; color: var(--faint); }
+
+  /* ================= ciphertext marquee ================= */
+  .band {
+    border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    padding: 13px 0; overflow: hidden;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+            mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+  .band-track {
+    display: flex; width: max-content; gap: 48px;
+    font-family: var(--mono); font-size: 11px; color: var(--faint);
+    white-space: nowrap;
+    animation: slide 70s linear infinite;
+  }
+  .band-track span { flex-shrink: 0; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .band-track { animation: none; } }
+
+  /* ================= sections ================= */
+  main section { border-bottom: 1px solid var(--line); padding: 120px 0; position: relative; }
+  main section:last-of-type { border-bottom: none; }
+
+  .sec-label {
+    font-family: var(--mono); font-size: 11px; color: var(--green-text);
+    letter-spacing: 0.06em; margin-bottom: 18px;
+  }
+  main h2 { font-size: clamp(28px, 4.2vw, 42px); line-height: 1.08; max-width: 20ch; letter-spacing: -0.032em; }
+  .sec-sub { margin-top: 18px; color: var(--muted); font-size: 15.5px; line-height: 1.7; max-width: 56ch; }
+  .sec-sub code, .cell code, li code, details code {
+    font-family: var(--mono); font-size: 0.82em;
+    background: var(--bg-2); border: 1px solid var(--line);
+    padding: 1px 5px; border-radius: 4px;
+  }
+
+  /* reveal on scroll — decorative, once, heavy fade-up with blur resolve */
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; transform: translateY(18px); filter: blur(5px); }
+    .reveal.in {
+      opacity: 1; transform: none; filter: blur(0);
+      transition: opacity 750ms var(--ease-out), transform 750ms var(--ease-out), filter 750ms var(--ease-out);
+    }
+  }
+
+  /* steps */
+  .steps { margin-top: 60px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 52px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; gap: 38px; } }
+  .step .n { font-family: var(--mono); font-size: 12px; color: var(--green-text); }
+  .step h3 { font-size: 17px; margin-top: 12px; font-weight: 620; }
+  .step p { margin-top: 8px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+  .step p b { color: var(--text); font-weight: 560; }
+
+  /* button states — replicas of the real chat-bar button */
+  .states {
+    margin-top: 68px; padding-top: 44px; border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px;
+  }
+  @media (max-width: 760px) { .states { grid-template-columns: repeat(2, 1fr); gap: 26px; } }
+  .state { display: flex; gap: 14px; align-items: flex-start; }
+  .bp-demo {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .bp-grey  { box-shadow: inset 0 0 0 1px var(--line-strong); }
+  .bp-green { background: rgba(59, 165, 93, 0.15); box-shadow: inset 0 0 0 1px var(--green); }
+  .bp-amber { background: rgba(250, 166, 26, 0.12); box-shadow: inset 0 0 0 1px var(--amber); }
+  .bp-red   { background: rgba(237, 66, 69, 0.12); box-shadow: inset 0 0 0 1px var(--red); }
+  .state b { display: block; font-size: 14px; font-weight: 620; }
+  .state small { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.55; margin-top: 3px; }
+
+  /* features — ruled rows, no cards, no icons */
+  .feats {
+    margin-top: 56px;
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 76px;
+  }
+  @media (max-width: 760px) { .feats { grid-template-columns: 1fr; } }
+  .cell { padding: 26px 0; border-top: 1px solid var(--line); }
+  .cell b { font-size: 15.5px; font-weight: 620; }
+  .cell p { margin-top: 7px; color: var(--muted); font-size: 14px; line-height: 1.7; }
+
+  /* statement — the page's mid-scroll pull-quote */
+  .statement { text-align: center; }
+  .statement .receipt {
+    font-family: var(--mono); font-size: 12px; color: var(--faint);
+    letter-spacing: 0.02em; line-height: 2;
+  }
+  .statement .receipt em { font-style: normal; color: var(--muted); }
+  .statement h2 {
+    margin: 22px auto 0; max-width: 16ch;
+    font-size: clamp(34px, 6vw, 68px); line-height: 1.04; letter-spacing: -0.038em;
+    text-wrap: balance;
+  }
+  /* the censored phrase — decrypts on hover, or locks open via the 🦇 */
+  .statement .sredact { position: relative; display: inline-block; white-space: nowrap; }
+  .statement .sredact::after {
+    content: ''; position: absolute; inset: 0.06em -0.06em 0.03em;
+    background: var(--green); border-radius: 0.07em;
+    clip-path: inset(0 0 0 0);
+    transition: clip-path 300ms var(--ease-in-out); /* re-censoring is quick */
+  }
+  .statement.on .sredact::after {
+    clip-path: inset(0 0 0 100%);
+    transition-duration: 700ms; /* declassifying is deliberate */
+  }
+  .statement .sr-text { transition: color 400ms var(--ease); }
+  .statement.on .sr-text { color: var(--green-text); }
+  .hbat {
+    display: inline-grid; place-items: center;
+    font-size: 0.42em; line-height: 1;
+    width: 1.8em; height: 1.8em; margin-left: 0.3em; vertical-align: 0.34em;
+    background: transparent; border: none; border-radius: 0.32em; cursor: pointer;
+    box-shadow: inset 0 0 0 1.5px var(--line-strong);
+    transition: box-shadow 300ms var(--ease), background-color 300ms var(--ease),
+                transform 160ms var(--ease-out);
+  }
+  .hbat:active { transform: scale(0.92); }
+  .statement.on .hbat { background: rgba(59, 165, 93, 0.16); box-shadow: inset 0 0 0 1.5px var(--green); }
+  .statement .s-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+  @media (prefers-reduced-motion: reduce) { .statement .sredact::after { display: none; } }
+
+  /* security */
+  .honesty { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 76px; }
+  @media (max-width: 760px) { .honesty { grid-template-columns: 1fr; gap: 44px; } }
+  .honesty h3 { font-size: 14px; font-weight: 650; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .honesty ul { list-style: none; margin-top: 6px; }
+  .honesty li {
+    padding: 11px 0 11px 28px; position: relative;
+    color: var(--muted); font-size: 14px; line-height: 1.65;
+  }
+  .honesty li b { color: var(--text); font-weight: 560; }
+  .yes li::before { content: '✓'; position: absolute; left: 2px; color: var(--green-text); }
+  .no li::before { content: '–'; position: absolute; left: 2px; color: var(--amber); }
+  .tos {
+    margin-top: 60px; padding: 20px 24px;
+    border-left: 2px solid var(--red); background: var(--bg-2);
+    border-radius: 0 12px 12px 0;
+    font-size: 13.5px; color: var(--muted); line-height: 1.75; max-width: 72ch;
+  }
+  .tos b { color: var(--text); font-weight: 620; }
+
+  /* install */
+  .install { margin-top: 52px; max-width: 640px; }
+  .install ol { list-style: none; counter-reset: st; }
+  .install li {
+    counter-increment: st;
+    position: relative; padding: 0 0 32px 48px;
+    font-size: 15px; color: var(--muted); line-height: 1.7;
+  }
+  .install li::before {
+    content: counter(st, decimal-leading-zero);
+    position: absolute; left: 0; top: 3px;
+    font-family: var(--mono); font-size: 11.5px; color: var(--green-text);
+  }
+  .install li:not(:last-child)::after {
+    content: ''; position: absolute; left: 11px; top: 28px; bottom: 8px;
+    width: 1px; background: var(--line);
+  }
+  .install li b { color: var(--text); font-weight: 560; }
+  .install a { color: var(--green-text); }
+  .install a:hover { text-decoration: underline; }
+  .paths { margin-top: 14px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .paths div { display: flex; gap: 16px; padding: 9px 15px; background: var(--bg-2); font-size: 12px; }
+  .paths span { min-width: 66px; color: var(--text); font-weight: 560; }
+  .paths code { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+
+  /* faq */
+  .faq { margin-top: 52px; max-width: 740px; }
+  details { border-top: 1px solid var(--line); }
+  details:last-child { border-bottom: 1px solid var(--line); }
+  summary {
+    cursor: pointer; list-style: none;
+    padding: 19px 36px 19px 0; position: relative;
+    font-size: 15.5px; font-weight: 570;
+    transition: color 150ms var(--ease);
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { color: var(--green-text); }
+  summary::after {
+    content: '+'; position: absolute; right: 4px; top: 50%; translate: 0 -50%;
+    color: var(--faint); font-weight: 400; font-size: 18px;
+    transition: rotate 200ms var(--ease-out);
+  }
+  details[open] summary::after { rotate: 45deg; }
+  details p { padding: 0 0 22px; color: var(--muted); font-size: 14px; line-height: 1.75; max-width: 62ch; }
+
+  /* ================= closing CTA ================= */
+  .outro { text-align: center; padding: 140px 28px 150px; position: relative; overflow: hidden; }
+  .outro::before {
+    content: ''; position: absolute; inset: auto 0 -220px; height: 540px;
+    background: radial-gradient(500px 320px at 50% 100%, rgba(59, 165, 93, 0.12), transparent 70%);
+    pointer-events: none;
+  }
+  .outro .bat-big { font-size: 46px; display: block; margin-bottom: 22px; }
+  .outro h2 { font-size: clamp(36px, 6vw, 64px); letter-spacing: -0.038em; margin: 0 auto; max-width: 16ch; line-height: 1.02; }
+  .outro p { margin: 20px auto 0; color: var(--muted); font-size: 16px; max-width: 44ch; }
+  .outro .btn { margin-top: 34px; }
+  .outro .mono-tail { margin-top: 28px; font-family: var(--mono); font-size: 11.5px; color: var(--faint); }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); padding: 44px 0 60px; }
+  footer .top { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+  footer .top a { color: var(--muted); margin-left: 18px; transition: color 150ms var(--ease); }
+  footer .top a:hover { color: var(--text); }
+  footer .legal { margin-top: 24px; color: var(--faint); font-size: 12px; line-height: 1.8; max-width: 76ch; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="#"><span class="tile">🦇</span>BetterPrivacy</a>
+  <a class="link" href="#how">How it works</a>
+  <a class="link" href="#coverage">Coverage</a>
+  <a class="link" href="#security">Security</a>
+  <a class="link" href="#faq">FAQ</a>
+  <a class="nav-dl" href="#install">Download <span class="ico">↓</span></a>
+</nav>
+
+<!-- ================= hero ================= -->
+<div class="hero" id="hero">
+  <canvas id="lens" aria-hidden="true"></canvas>
+
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="dot"></span>BetterDiscord plugin · E2E encryption</p>
+      <h1>Privacy, without <span class="redact"><span>leaving Discord.</span></span></h1>
+      <p class="sub">
+        Keep your servers, your friends, your memes. Messages and files encrypt
+        <strong>inside your client, before they're sent</strong> — share one phrase,
+        everything else is automatic.
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-green" href="#install">Download the plugin <span class="ico">↓</span></a>
+        <a class="btn btn-quiet" href="#how">How it works</a>
+      </div>
+      <ul class="facts">
+        <li>
+          <b>AES-256-GCM, locally</b>
+          <span>Sealed in your client; opened only on screen. No servers, no accounts.</span>
+        </li>
+        <li>
+          <b>Phrase + channel = key</b>
+          <span>Deterministic — survives reinstalls and new machines. Nothing to back up.</span>
+        </li>
+        <li>
+          <b>Files too</b>
+          <span>Uploads become opaque <code>.bpenc</code> blobs; key holders see inline previews.</span>
+        </li>
+        <li>
+          <b>Fails closed</b>
+          <span>If a Discord update breaks hooks, sending blocks — plaintext never leaks.</span>
+        </li>
+      </ul>
+      <p class="hero-note"><span id="decode">status: send+render+attachments patched · v1.0.0 · 0 servers</span><span class="caret"></span></p>
+    </div>
+
+    <div class="hero-demo">
+      <div class="demo" id="demo">
+        <div class="shell">
+          <div class="chat" id="chat" aria-hidden="true">
+            <div class="chat-top">
+              # stargazing
+              <span class="enc-tag" id="enc-tag">encryption off</span>
+            </div>
+            <div class="chat-msgs">
+              <div class="msg" id="msg1">
+                <div class="avatar a1">FG</div>
+                <div class="msg-body">
+                  <div class="meta">foxglove <time>Today at 21:14</time></div>
+                  <div class="stack">
+                    <span class="cipher">🦇&lt;https://betterprivacy.app/m#v1.kQ3xR7wZ.mQ4tJx0eRb2LcYw8ZfAhKg.9hTf2LmXqA1c4WvB.Yx2mo4Vt8jN3wLcPz0KsRfEHqUgD5aT&gt;</span>
+                    <span class="plain">rooftop at midnight? comet's peaking, I'll bring the telescope</span>
+                  </div>
+                </div>
+              </div>
+              <div class="msg msg-new" id="msg2" hidden>
+                <div class="avatar a2">Y</div>
+                <div class="msg-body">
+                  <div class="meta">you <time>Today at 21:16</time></div>
+                  <div class="stack">
+                    <span class="cipher">🦇&lt;https://betterprivacy.app/m#v1.kQ3xR7wZ.mQ4tJx0eRb2LcYw8ZfAhKg.Ub5nP0eYtG8kD2sM.H7cVw1RqZfXoAy9jT4bKiL6mEsNdOgu&gt;</span>
+                    <span class="plain">on my way — saving you the spot by the chimney</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="inputbar">
+              <span class="itype" id="itype"></span><span class="icaret"></span><span class="spacer"></span>
+              <button class="bat" id="bat" tabindex="-1">🦇</button>
+            </div>
+
+            <div class="phrase-card" id="phrase-card" hidden>
+              <div class="phrase-box">
+                <label>Set a secret phrase</label>
+                <div class="phrase-input"><span id="typed"></span><span class="caret2"></span></div>
+                <small>Long and unique — the phrase is the entire protection.</small>
+              </div>
+            </div>
+
+            <div class="fxc" id="fxc"></div>
+          </div>
+        </div>
+        <p class="demo-hint" id="hint">A friend already encrypted #stargazing — you just need the phrase.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="band" aria-hidden="true">
+  <div class="band-track">
+    <span>🦇&lt;https://betterprivacy.app/m#v1.kQ3xR7wZ.mQ4tJx0eRb2LcYw8ZfAhKg.9hTf2LmXqA1c4WvB.Yx2mo4Vt8jN…&gt;</span>
+    <span>🦇&lt;https://betterprivacy.app/m#v1.kQ3xR7wZ.mQ4tJx0eRb2LcYw8ZfAhKg.Ub5nP0eYtG8kD2sM.H7cVw1RqZfX…&gt;</span>
+    <span>🦇&lt;https://betterprivacy.app/m#v1.kQ3xR7wZ.mQ4tJx0eRb2LcYw8ZfAhKg.c2VjcmV0LXBoc.Qm9uZmlyZU5pZ2h…&gt;</span>
+  </div>
+</div>
+
+<main>
+  <!-- how it works -->
+  <section id="how">
+    <div class="wrap reveal">
+      <p class="sec-label">01 / HOW IT WORKS</p>
+      <h2>One button. One phrase. Nothing else to manage.</h2>
+      <p class="sec-sub">
+        The key derives from your phrase and the channel itself, so the same phrase in the same
+        channel always produces the same key — for everyone, on any machine, forever. No key
+        files, no QR codes, no exchange protocol.
+      </p>
+
+      <div class="steps">
+        <div class="step">
+          <span class="n">/01</span>
+          <h3>Click the 🦇 in the chat bar</h3>
+          <p>Open any channel, group, or DM. The bat button sits next to the message box and asks for exactly one thing.</p>
+        </div>
+        <div class="step">
+          <span class="n">/02</span>
+          <h3>Set a secret phrase</h3>
+          <p>Make it long and unique — it's the entire protection. From that moment everything you send goes out encrypted, automatically.</p>
+        </div>
+        <div class="step">
+          <span class="n">/03</span>
+          <h3>Tell your people the phrase</h3>
+          <p>Share it <b>outside Discord</b>. They click the same 🦇, type the same phrase, and every message decrypts — past and future.</p>
+        </div>
+      </div>
+
+      <div class="states">
+        <div class="state">
+          <span class="bp-demo bp-grey">🦇</span>
+          <div><b>Grey</b><small>Not encrypted. Click to set a phrase.</small></div>
+        </div>
+        <div class="state">
+          <span class="bp-demo bp-green">🦇</span>
+          <div><b>Green</b><small>Encrypted. Everything sends as ciphertext.</small></div>
+        </div>
+        <div class="state">
+          <span class="bp-demo bp-amber">🦇</span>
+          <div><b>Amber</b><small>Locked. Enter the phrase to unlock.</small></div>
+        </div>
+        <div class="state">
+          <span class="bp-demo bp-red">🦇</span>
+          <div><b>Red</b><small>Broken by a Discord update. Sending is blocked, never leaked.</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- coverage -->
+  <section id="coverage">
+    <div class="wrap reveal">
+      <p class="sec-label">02 / COVERAGE</p>
+      <h2>Everything encrypts. Discord still feels like Discord.</h2>
+
+      <div class="feats">
+        <div class="cell">
+          <b>Full markdown, after decrypt</b>
+          <p>Code blocks with syntax highlighting, spoilers, custom emoji, links — rendered by Discord's own parser once decrypted. It reads like a normal message, in green.</p>
+        </div>
+        <div class="cell">
+          <b>Encrypted files &amp; media</b>
+          <p>Images, video, audio, any file — uploaded as opaque <code>.bpenc</code> blobs with the real filename sealed inside. Key holders see inline previews; everyone else sees noise.</p>
+        </div>
+        <div class="cell">
+          <b>Nothing to back up</b>
+          <p>Keys are derived, never stored. Wipe the plugin, switch machines, come back a year later — type the phrase and everything comes back.</p>
+        </div>
+        <div class="cell">
+          <b>Auto-locking sessions</b>
+          <p>Keys live in memory only and re-lock after inactivity. <code>Ctrl+Shift+L</code> locks everything instantly; optional lockdown mode re-locks on every channel switch.</p>
+        </div>
+        <div class="cell">
+          <b>Per-channel control</b>
+          <p>Each channel has its own key and its own on/off switch. <code>/pt</code> sends a single message in plaintext; <code>/enc</code> picks a specific key. Power features stay in Settings.</p>
+        </div>
+        <div class="cell">
+          <b>Fails closed, never open</b>
+          <p>If a Discord update breaks message interception, the plugin blocks sending instead of silently leaking plaintext — the 🦇 turns red and says exactly what's wrong.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- statement -->
+  <section class="statement" id="statement">
+    <div class="wrap reveal">
+      <p class="receipt">data breach → <em>ciphertext</em> &nbsp;·&nbsp; scanning bot → <em>ciphertext</em> &nbsp;·&nbsp; subpoena → <em>ciphertext</em></p>
+      <h2>Discord can't reveal <span class="sredact" id="sredact"><span class="sr-text" id="srtext">what it can't see.</span></span><button class="hbat" id="sbat" aria-pressed="false" aria-label="Decrypt with BetterPrivacy">🦇</button></h2>
+      <p class="s-hint">click the 🦇 — or hover the redaction — to decrypt</p>
+    </div>
+  </section>
+
+  <!-- security -->
+  <section id="security">
+    <div class="wrap reveal">
+      <p class="sec-label">03 / SECURITY, HONESTLY</p>
+      <h2>Clear about what it does — and what it doesn't.</h2>
+      <p class="sec-sub">
+        The model is simple — Discord can't read what it never receives. Here are its exact
+        edges: passphrase-based symmetric encryption with standard primitives, AES-256-GCM via
+        WebCrypto, PBKDF2-HMAC-SHA256 at 600,000 rounds, reviewed adversarially before release.
+      </p>
+
+      <div class="honesty">
+        <div>
+          <h3>What it protects</h3>
+          <ul class="yes">
+            <li><b>Message and file contents.</b> Discord's servers, data breaches, and subpoenas get ciphertext only.</li>
+            <li><b>Against network observers.</b> ISPs and WiFi snoops see authenticated AES-256-GCM blobs.</li>
+            <li><b>Against non-recipients.</b> Anyone in the channel without the phrase sees unreadable ciphertext.</li>
+            <li><b>Attachment names.</b> Files upload as randomly-named <code>.bpenc</code>; the real name is inside the encryption.</li>
+            <li><b>Against tampering.</b> A modified message fails loudly instead of decrypting to something wrong.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What it doesn't</h3>
+          <ul class="no">
+            <li><b>Metadata.</b> Who talks to whom, when, and how much stays visible — as does the fact that you encrypt.</li>
+            <li><b>Weak phrases.</b> The phrase is the entire defense. Short or reused phrases can be guessed.</li>
+            <li><b>No forward secrecy.</b> A leaked phrase exposes past and future messages encrypted with it.</li>
+            <li><b>Your own device.</b> Malware, or anyone at your unlocked keyboard, sees what you see.</li>
+            <li><b>Voice and video calls.</b> Out of scope — chat messages and file attachments only.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="tos">
+        <b>Discord ToS warning.</b> BetterPrivacy runs on BetterDiscord, and modifying the Discord
+        client violates Discord's Terms of Service — accounts can be suspended or banned. This project
+        is for educational and personal use. Don't run it on an account you can't afford to lose.
+      </div>
+    </div>
+  </section>
+
+  <!-- install -->
+  <section id="install">
+    <div class="wrap reveal">
+      <p class="sec-label">04 / INSTALL</p>
+      <h2>Two minutes, four steps.</h2>
+
+      <div class="install">
+        <ol>
+          <li>Install <a href="https://betterdiscord.app/" rel="noopener">BetterDiscord</a> — desktop only: Windows, macOS, or Linux.</li>
+          <li>
+            <a href="/BetterPrivacy.plugin.js" download><b>Download BetterPrivacy.plugin.js</b></a> and drop it into your plugins folder:
+            <div class="paths">
+              <div><span>Windows</span><code>%APPDATA%\BetterDiscord\plugins\</code></div>
+              <div><span>macOS</span><code>~/Library/Application Support/BetterDiscord/plugins/</code></div>
+              <div><span>Linux</span><code>~/.config/BetterDiscord/plugins/</code></div>
+            </div>
+          </li>
+          <li>In Discord, open <b>Settings → BetterDiscord → Plugins</b> and switch <b>BetterPrivacy</b> on.</li>
+          <li>Open a channel, click the <b>🦇</b>, set a phrase. You're encrypted.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- faq -->
+  <section id="faq">
+    <div class="wrap reveal">
+      <p class="sec-label">05 / FAQ</p>
+      <h2>Questions people actually ask.</h2>
+
+      <div class="faq">
+        <details>
+          <summary>What do people without the plugin see?</summary>
+          <p>A 🦇 followed by a link to this site. Clicking it opens the <a href="/m">decrypt page</a>: the scrambled payload rides in the URL fragment — which browsers never send to any server — and the secret phrase unlocks it right in the browser. Every encrypted message is both unreadable and a signpost to the plugin.</p>
+        </details>
+        <details>
+          <summary>Do I need an account or a server?</summary>
+          <p>No. There is no backend, no signup, no telemetry. Every cryptographic operation happens inside your Discord client via the WebCrypto API. This website is just a download page.</p>
+        </details>
+        <details>
+          <summary>What if I forget my phrase?</summary>
+          <p>It's gone — by design. The plugin never stores the phrase or any way to recover it. Anyone else who knows the phrase effectively holds the backup, since typing it in the same channel always recreates the key.</p>
+        </details>
+        <details>
+          <summary>How do keys survive reinstalling the plugin?</summary>
+          <p>Keys are derived deterministically — PBKDF2 over your phrase, salted by the channel. The phrase plus the channel <em>is</em> the key. Reinstall, switch machines, type the phrase again, and everything decrypts.</p>
+        </details>
+        <details>
+          <summary>Can I send one unencrypted message without switching encryption off?</summary>
+          <p>Yes — prefix it with <code>/pt</code> and that single message goes out in plaintext. There's also <code>/enc &lt;label&gt; &lt;message&gt;</code> to encrypt with a specific key.</p>
+        </details>
+        <details>
+          <summary>Does it work on mobile?</summary>
+          <p>No. BetterDiscord is a desktop client mod, so BetterPrivacy is desktop-only. Messages received on mobile stay ciphertext and decrypt once you're back at your desk.</p>
+        </details>
+        <details>
+          <summary>Is this against Discord's Terms of Service?</summary>
+          <p>Yes — all client modification is, including BetterDiscord itself. Accounts can be suspended or banned. Weigh that risk before using it on an account that matters to you.</p>
+        </details>
+        <details>
+          <summary>Why should I trust the crypto?</summary>
+          <p>Standard primitives, no inventions: AES-256-GCM via WebCrypto, PBKDF2-HMAC-SHA256 key derivation, authenticated chunked file encryption. The wire format is open, and the code went through adversarial security review before release.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- closing CTA -->
+<div class="outro reveal">
+  <span class="bat-big" aria-hidden="true">🦇</span>
+  <h2>Go dark. Stay comfy.</h2>
+  <p>Same servers, same friends, same memes — minus the readable messages. Your next one can already be ciphertext.</p>
+  <a class="btn btn-green" href="#install">Download BetterPrivacy <span class="ico">↓</span></a>
+  <p class="mono-tail">v1.0.0 · wire: 🦇&lt;betterprivacy.app/m#v1.…&gt; · no servers were involved in the making of this plugin</p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="top">
+      <span>🦇 <b>BetterPrivacy</b></span>
+      <span>
+        <a href="#how">How it works</a>
+        <a href="#security">Security</a>
+        <a href="#install">Install</a>
+      </span>
+    </div>
+    <p class="legal">
+      BetterPrivacy is an independent open project — not affiliated with, endorsed by, or connected
+      to Discord Inc. or the BetterDiscord project. "Discord" is a trademark of Discord Inc. Client
+      modifications violate Discord's Terms of Service and may result in account suspension or
+      termination; use at your own risk. Provided as-is, without warranty. Encryption reduces risk —
+      no software eliminates it.
+    </p>
+  </div>
+</footer>
+
+<script>
+  var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  // Headline redaction wipe fires once the page settles.
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { document.documentElement.classList.add('loaded') })
+  })
+
+  // ---- decryption lens -----------------------------------------------------
+  // A field of ciphertext glyphs fills the hero. Inside the lens (your cursor)
+  // the noise resolves into readable plaintext — you can only read what you
+  // hold the key to. Idle: the lens drifts on its own.
+  ;(function () {
+    var hero = document.getElementById('hero')
+    var canvas = document.getElementById('lens')
+    var ctx = canvas.getContext('2d')
+    var DPR = Math.min(window.devicePixelRatio || 1, 1.5)
+    var CELL = 26, FONT = 12
+    var GLYPHS = 'abcdefghijklmnopqrstuvwxyz0123456789|_-+='
+    var SECRET = 'what discord never receives it cannot read · it cannot reveal what it cannot see · privacy is a feature not a crime · encrypt everything · betterprivacy.app · '
+    var R = 150
+    var W, H, COLS, ROWS, base
+    var mx = -9999, my = -9999, tx = -9999, ty = -9999
+    var auto = true, t = Math.PI / 3
+    var running = false, visible = true
+
+    function build() {
+      W = hero.clientWidth
+      H = hero.clientHeight
+      canvas.width = Math.round(W * DPR)
+      canvas.height = Math.round(H * DPR)
+      canvas.style.width = W + 'px'
+      canvas.style.height = H + 'px'
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0)
+      COLS = Math.ceil(W / CELL)
+      ROWS = Math.ceil(H / CELL)
+      base = document.createElement('canvas')
+      base.width = canvas.width
+      base.height = canvas.height
+      var b = base.getContext('2d')
+      b.setTransform(DPR, 0, 0, DPR, 0, 0)
+      b.font = FONT + 'px "Geist Mono", ui-monospace, Menlo, monospace'
+      b.textAlign = 'center'
+      b.textBaseline = 'middle'
+      b.fillStyle = 'rgba(170, 182, 200, 0.085)'
+      for (var r = 0; r < ROWS; r++)
+        for (var c = 0; c < COLS; c++)
+          b.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], c * CELL + CELL / 2, r * CELL + CELL / 2)
+    }
+
+    function frame() {
+      if (!visible) { running = false; return }
+      t += 0.0038
+      if (auto) {
+        tx = W * (0.5 + 0.38 * Math.sin(t * 1.3))
+        ty = H * (0.42 + 0.27 * Math.sin(t * 2.05))
+      }
+      mx += (tx - mx) * 0.075
+      my += (ty - my) * 0.075
+
+      ctx.clearRect(0, 0, W, H)
+      ctx.drawImage(base, 0, 0, W, H)
+
+      // soft green ambience under the lens
+      var g = ctx.createRadialGradient(mx, my, 0, mx, my, R)
+      g.addColorStop(0, 'rgba(59, 165, 93, 0.06)')
+      g.addColorStop(1, 'rgba(59, 165, 93, 0)')
+      ctx.fillStyle = g
+      ctx.fillRect(mx - R, my - R, R * 2, R * 2)
+
+      // resolve the secret inside the lens
+      ctx.font = FONT + 'px "Geist Mono", ui-monospace, Menlo, monospace'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      var c0 = Math.max(0, Math.floor((mx - R) / CELL))
+      var c1 = Math.min(COLS - 1, Math.ceil((mx + R) / CELL))
+      var r0 = Math.max(0, Math.floor((my - R) / CELL))
+      var r1 = Math.min(ROWS - 1, Math.ceil((my + R) / CELL))
+      for (var r = r0; r <= r1; r++) {
+        for (var c = c0; c <= c1; c++) {
+          var x = c * CELL + CELL / 2
+          var y = r * CELL + CELL / 2
+          var dx = x - mx, dy = y - my
+          var d = Math.sqrt(dx * dx + dy * dy)
+          if (d > R) continue
+          var a = Math.pow(1 - d / R, 1.6)
+          var ch = SECRET[(r * COLS + c) % SECRET.length]
+          if (ch === ' ') continue
+          ctx.fillStyle = 'rgba(90, 188, 124, ' + (0.16 + 0.62 * a).toFixed(3) + ')'
+          ctx.fillText(ch, x, y)
+        }
+      }
+      requestAnimationFrame(frame)
+    }
+
+    function start() {
+      if (!running && visible && !reduceMotion) { running = true; requestAnimationFrame(frame) }
+    }
+
+    build()
+    if (reduceMotion) {
+      ctx.drawImage(base, 0, 0, W, H) // static texture only, no motion
+    } else {
+      hero.addEventListener('pointermove', function (e) {
+        var rect = hero.getBoundingClientRect()
+        tx = e.clientX - rect.left
+        ty = e.clientY - rect.top
+        auto = false
+      }, { passive: true })
+      hero.addEventListener('pointerleave', function () { auto = true }, { passive: true })
+      new IntersectionObserver(function (entries) {
+        visible = entries[0].isIntersecting
+        start()
+      }).observe(hero)
+      var resizeT
+      window.addEventListener('resize', function () {
+        clearTimeout(resizeT)
+        resizeT = setTimeout(function () { build() }, 150)
+      })
+      // rebuild once the mono font arrives so glyphs render in Geist Mono
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { build() })
+      start()
+    }
+  })()
+
+  // ---- mono status line decodes on load ------------------------------------
+  ;(function () {
+    var el = document.getElementById('decode')
+    var final = el.textContent
+    if (reduceMotion) return
+    var pool = 'abcdef0123456789|_-'
+    var t0 = null
+    var DURATION = 1100
+    el.textContent = ''
+    function frame(ts) {
+      if (t0 === null) t0 = ts
+      var done = Math.floor(((ts - t0) / DURATION) * final.length)
+      var out = final.slice(0, done)
+      for (var i = done; i < final.length; i++) {
+        var c = final[i]
+        out += c === ' ' || c === '·' ? c : pool[Math.floor(Math.random() * pool.length)]
+      }
+      el.textContent = out
+      if (done < final.length) requestAnimationFrame(frame)
+      else el.textContent = final
+    }
+    requestAnimationFrame(frame)
+  })()
+
+  // ---- the living illustration ----------------------------------------------
+  // A self-playing loop of the plugin's real flow: the cursor clicks the 🦇,
+  // a phrase is set, the channel arms, the old message decrypts, a reply is
+  // typed, sent as ciphertext, and decrypts locally. Repeats while visible.
+  ;(function () {
+    var demo = document.getElementById('demo')
+    var chat = document.getElementById('chat')
+    var bat = document.getElementById('bat')
+    var tag = document.getElementById('enc-tag')
+    var hint = document.getElementById('hint')
+    var card = document.getElementById('phrase-card')
+    var typed = document.getElementById('typed')
+    var itype = document.getElementById('itype')
+    var msg1 = document.getElementById('msg1')
+    var msg2 = document.getElementById('msg2')
+    var cur = document.getElementById('fxc')
+    var PHRASE = 'moonlight over the chimney'
+    var MSG = "on my way — saving you the spot by the chimney"
+
+    function endState() {
+      chat.classList.add('armed')
+      demo.classList.add('lit')
+      msg1.classList.add('dec')
+      msg2.hidden = false
+      msg2.classList.add('in', 'dec')
+      tag.textContent = 'decrypted locally'
+      hint.textContent = 'Messages encrypt before sending; only phrase holders ever see plaintext.'
+    }
+
+    if (reduceMotion) { endState(); return }
+
+    var visible = true, running = false
+    new IntersectionObserver(function (es) {
+      visible = es[0].isIntersecting
+      if (visible && !running) loop()
+    }, { threshold: 0.3 }).observe(demo)
+
+    function delay(ms) { return new Promise(function (res) { setTimeout(res, ms) }) }
+
+    function moveCursorTo(el, dx, dy) {
+      var cr = chat.getBoundingClientRect()
+      var er = el.getBoundingClientRect()
+      var x = er.left - cr.left + er.width / 2 + (dx || 0)
+      var y = er.top - cr.top + er.height / 2 + (dy || 0)
+      cur.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+    }
+
+    function typeInto(el, text, speed) {
+      return new Promise(function (res) {
+        var i = 0
+        var timer = setInterval(function () {
+          el.textContent = text.slice(0, ++i)
+          if (i >= text.length) { clearInterval(timer); res() }
+        }, speed)
+      })
+    }
+
+    function reset() {
+      chat.classList.remove('armed')
+      demo.classList.remove('lit')
+      msg1.classList.remove('dec')
+      msg2.classList.remove('in', 'dec')
+      msg2.hidden = true
+      itype.textContent = ''
+      typed.textContent = ''
+      card.hidden = true
+      card.classList.remove('leaving')
+      cur.style.opacity = '0'
+      tag.textContent = 'encryption off'
+      hint.textContent = 'A friend already encrypted #stargazing — you just need the phrase.'
+    }
+
+    async function loop() {
+      running = true
+      while (visible) {
+        reset()
+        await delay(1000); if (!visible) break
+
+        // the cursor arrives and clicks the bat
+        moveCursorTo(bat)
+        cur.style.opacity = '1'
+        await delay(800)
+        bat.classList.add('pressed')
+        await delay(160)
+        bat.classList.remove('pressed')
+
+        // set the phrase
+        card.hidden = false
+        await delay(400)
+        await typeInto(typed, PHRASE, 34)
+        await delay(450)
+        card.classList.add('leaving')
+        await delay(300)
+        card.hidden = true
+        card.classList.remove('leaving')
+
+        // channel arms; the friend's old message decrypts
+        chat.classList.add('armed')
+        demo.classList.add('lit')
+        tag.textContent = 'key derived — channel armed'
+        msg1.classList.add('dec')
+        hint.textContent = 'Same phrase, same channel → same key. The old message just decrypted.'
+        await delay(1600); if (!visible) break
+
+        // type a reply
+        moveCursorTo(itype, 40, 0)
+        await delay(700)
+        await typeInto(itype, MSG, 26)
+        await delay(350)
+
+        // send: what leaves the client is ciphertext
+        itype.textContent = ''
+        msg2.hidden = false
+        requestAnimationFrame(function () { msg2.classList.add('in') })
+        tag.textContent = 'encrypted before sending'
+        hint.textContent = 'Sent. Discord receives and stores only this ciphertext.'
+        await delay(1700); if (!visible) break
+
+        // ...which decrypts locally for phrase holders
+        msg2.classList.add('dec')
+        tag.textContent = 'decrypted locally'
+        hint.textContent = 'Phrase holders see plaintext — rendered only on their screens.'
+        cur.style.opacity = '0'
+        await delay(3600)
+      }
+      running = false
+    }
+    loop()
+  })()
+
+  // ---- statement: decrypt-on-demand -----------------------------------------
+  // The censored phrase decrypts like a plugin message: the bar wipes away
+  // while the text resolves out of scramble into green. Hover previews it;
+  // the 🦇 locks it open. Re-censoring is instant and quick, like re-locking.
+  ;(function () {
+    var root = document.getElementById('statement')
+    var span = document.getElementById('sredact')
+    var textEl = document.getElementById('srtext')
+    var batBtn = document.getElementById('sbat')
+    var TEXT = textEl.textContent
+    var locked = false, hovering = false, token = 0
+
+    function scramble(dur) {
+      var id = ++token
+      var pool = 'abcdefghjkmnpqrstuvwxyz0123456789'
+      var t0 = null
+      function step(ts) {
+        if (id !== token) return
+        if (t0 === null) t0 = ts
+        var p = Math.min(1, (ts - t0) / dur)
+        var done = Math.floor(p * TEXT.length)
+        var out = TEXT.slice(0, done)
+        for (var i = done; i < TEXT.length; i++) {
+          var c = TEXT[i]
+          out += /[a-zA-Z]/.test(c) ? pool[(Math.random() * pool.length) | 0] : c
+        }
+        textEl.textContent = out
+        if (p < 1) requestAnimationFrame(step)
+      }
+      requestAnimationFrame(step)
+    }
+
+    function update() {
+      var on = locked || hovering
+      if (on === root.classList.contains('on')) return
+      root.classList.toggle('on', on)
+      batBtn.setAttribute('aria-pressed', String(on))
+      if (on) scramble(700)
+      else { token++; textEl.textContent = TEXT }
+    }
+
+    if (reduceMotion) {
+      root.classList.add('on')
+      batBtn.setAttribute('aria-pressed', 'true')
+      return
+    }
+    if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      span.addEventListener('mouseenter', function () { hovering = true; update() })
+      span.addEventListener('mouseleave', function () { hovering = false; update() })
+    }
+    batBtn.addEventListener('click', function () { locked = !locked; update() })
+  })()
+
+  // ---- nav scrollspy ----------------------------------------------------------
+  // The pill nav highlights the section currently in the middle of the viewport.
+  ;(function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.nav a.link[href^="#"]'))
+    var map = {}
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a })
+    var current = null
+    function setActive(id) {
+      if (current === id) return
+      current = id
+      links.forEach(function (a) { a.classList.remove('active') })
+      if (id && map[id]) map[id].classList.add('active')
+    }
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) setActive(e.target.id)
+      })
+    }, { rootMargin: '-30% 0px -60% 0px' })
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id)
+      if (el) spy.observe(el)
+    })
+    // hero and outro clear the highlight (their ids aren't nav targets)
+    spy.observe(document.getElementById('hero'))
+    var outro = document.querySelector('.outro')
+    if (outro) spy.observe(outro)
+  })()
+
+  // ---- section reveals -------------------------------------------------------
+  if (!reduceMotion && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+      })
+    }, { rootMargin: '-60px 0px' })
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el) })
+  } else {
+    document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in') })
+  }
+</script>
+
+</body>
+</html>
