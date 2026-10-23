@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#080b09"/>
+  <circle cx="1110" cy="90" r="350" fill="#101e15"/>
+  <circle cx="1110" cy="90" r="270" fill="#14271b"/>
+  <g transform="translate(925 155) scale(4)" fill="#8bd9a1">
+    <path d="M23 16C16 7 9 9 2 3C2 14 5 21 10 25Q13 19 17 24Q19 20 23 22ZM25 16C32 7 39 9 46 3C46 14 43 21 38 25Q35 19 31 24Q29 20 25 22ZM20 15L20 8L24 12L28 8L28 15Q31 24 24 29Q17 24 20 15Z"/>
+  </g>
+  <g font-family="Avenir Next, sans-serif">
+    <text x="72" y="95" fill="#eaf1ec" font-size="30" font-weight="600">BetterPrivacy</text>
+    <text x="72" y="254" fill="#f2f6f3" font-size="76" font-weight="700">Privacy, without</text>
+    <text x="72" y="345" fill="#8bd9a1" font-size="76" font-weight="700">leaving Discord.</text>
+    <text x="76" y="419" fill="#a6b5ab" font-size="27">Your servers. Your friends. Encrypted messages and files.</text>
+    <rect x="74" y="508" width="246" height="44" rx="22" fill="#192c20"/>
+    <text x="97" y="537" fill="#9bd9ad" font-size="18" font-weight="600">OPEN SOURCE PLUGIN</text>
+    <text x="1125" y="539" text-anchor="end" fill="#c5d1c9" font-size="24">betterprivacy.app</text>
+  </g>
+</svg>
