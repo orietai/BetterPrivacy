@@ -18,6 +18,19 @@ on an ordinary HTTP LAN address. Open through a local server rather than
 `site/BetterPrivacy.plugin.js` for the download button. That generated file
 is ignored by Git.
 
+## Cloudflare Workers Builds
+
+Connect the repository with the repository root as the root directory and
+`main` as the production branch. The root `wrangler.jsonc` serves `site/` as
+static assets; no Worker application entry point is required.
+
+- Build command: `npm run build:site`
+- Deploy command: `npx wrangler deploy`
+- Preview command: `npx wrangler preview`
+
+Use Node.js 24 for builds. The Worker name must match `betterprivacy` in
+`wrangler.jsonc`. Configure the custom domain in Cloudflare after deployment.
+
 ## Routes
 
 | Route | Purpose |

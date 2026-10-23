@@ -4,6 +4,7 @@ site/BetterPrivacy.plugin.js
 
 # dependencies
 node_modules/
+.wrangler/
 
 # local agent/editor tooling (not part of the project)
 .agents/
