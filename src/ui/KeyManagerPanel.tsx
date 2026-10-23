@@ -15,6 +15,7 @@ import type { PluginContext, SettingsData } from '../types'
 import { friendlyFailureNames } from '../index'
 import { openCreateKeyModal } from './UnlockModal'
 import { t } from '../i18n'
+import { unlockIfCurrent } from '../core/session'
 
 const MB = 1024 * 1024
 
@@ -106,20 +107,35 @@ function openImportKeyModal(ctx: PluginContext, onDone: () => void): void {
   // onConfirm is sync and the modal closes immediately; the inputs mirror
   // their values into this closure and the async import runs afterwards.
   const state = { blob: '', pass: '' }
+  const revision = ctx.session.revision
+  let cancelled = false
+  let confirming = false
+  let started = false
+  const current = (): boolean => !cancelled && ctx.session.revision === revision
+  const cancel = (): void => { cancelled = true; state.pass = '' }
+  ctx.disposers.push(cancel)
   BdApi.UI.showConfirmationModal(t('km.import.title'), <ImportKeyContent state={state} />, {
     confirmText: t('common.import'),
     cancelText: t('common.cancel'),
     onConfirm: () => {
+      if (started || !current()) return
+      started = true
+      confirming = true
+      const phrase = state.pass
+      const blob = state.blob.trim()
+      state.pass = ''
       void ctx.keyring
-        .importBlob(state.blob.trim(), state.pass)
+        .importBlob(blob, phrase)
         .then(async (entry) => {
+          if (!current()) return
           // The passphrase was just verified against the KCV — unlock now so
           // imported keys work immediately without a second passphrase entry.
           try {
-            await ctx.session.unlock(entry, state.pass)
+            await unlockIfCurrent(ctx.session, entry, phrase, current)
           } catch {
             // Import stands on its own; unlocking can be done later.
           }
+          if (!current()) return
           BdApi.UI.showToast(t('km.imported', { label: entry.label, id: entry.id }), {
             type: 'success',
           })
@@ -127,9 +143,12 @@ function openImportKeyModal(ctx: PluginContext, onDone: () => void): void {
           onDone()
         })
         .catch((err: any) => {
+          if (!current()) return
           BdApi.UI.showToast(err?.message ?? t('km.importFailed'), { type: 'error' })
         })
     },
+    onCancel: cancel,
+    onCloseCallback: () => { if (!confirming) cancel() },
   })
 }
 

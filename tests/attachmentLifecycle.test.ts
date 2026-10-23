@@ -109,6 +109,19 @@ function harness() {
   return { ctx, cache, start, off, on, lock, unlock, stop, host, fetch, cached, created, revoked, frames, cancelFrame, mutation: () => mutation(), roots }
 }
 
+describe('attachment active content isolation', () => {
+  it.each(['text/html', 'image/svg+xml', 'application/xml'])('downloads %s as inert bytes', async mime => {
+    const h = harness()
+    const value = opened()
+    value.header.mime = mime
+    vi.mocked(decryptBpenc).mockResolvedValue(value)
+    h.start()
+    await vi.waitFor(() => expect(h.cached()?.kind).toBe('media'))
+    expect((h.created.mock.calls[0]![0] as Blob).type).toBe('application/octet-stream')
+    expect(h.cached()).toMatchObject({ header: { mime: 'application/octet-stream' } })
+  })
+})
+
 describe('attachment lifecycle flows', () => {
   it.each(['off', 'lock', 'stop'] as const)('ignores a pending download completing after %s', async action => {
     const h = harness()

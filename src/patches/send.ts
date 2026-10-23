@@ -370,9 +370,16 @@ export function applySendPatch(ctx: PluginContext): void {
           }
           const label = match[1]!
           const plaintext = match[2]!
-          const entry = ctx.keyring
+          const matches = ctx.keyring
             .list()
-            .find((e) => e.label.toLowerCase() === label.toLowerCase())
+            .filter((e) => e.label.toLowerCase() === label.toLowerCase())
+          if (matches.length > 1) {
+            // Reused labels are legitimate after phrase changes. A command
+            // must never guess which group's key the user intended.
+            toast(t('send.noKeySelected'), 'warning')
+            return Promise.resolve()
+          }
+          const entry = matches[0]
           if (!entry) {
             toast(t('send.noKeyLabelled', { label }), 'error')
             return Promise.resolve()

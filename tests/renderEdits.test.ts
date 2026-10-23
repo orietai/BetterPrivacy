@@ -54,6 +54,16 @@ async function harness() {
 }
 
 describe('encrypted edits render identity', () => {
+  it.each(['Enter', ' '])('allows keyboard activation of a locked message with %j', async key => {
+    const h = await harness()
+    h.ctx.session.getKey = () => null
+    const view = h.mount(h.render(await h.wire('private')))
+    const click = vi.fn()
+    const preventDefault = vi.fn()
+    view.props.onKeyDown({ key, currentTarget: { click }, preventDefault })
+    expect(click).toHaveBeenCalledOnce()
+    expect(preventDefault).toHaveBeenCalledOnce()
+  })
   it('does not display cached plaintext when the session key is gone', async () => {
     const h = await harness()
     const element = h.render(await h.wire('private'))

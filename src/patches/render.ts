@@ -30,6 +30,13 @@ import { resolveCurrentChannelId } from '../modules'
 /** Keep in sync with RERENDER_EVENT in index.ts (not exported from there). */
 const RERENDER_EVENT = 'bp-rerender'
 
+function activateChip(event: any): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    event.currentTarget.click()
+  }
+}
+
 interface EncryptedContentProps {
   ctx: PluginContext
   parts: WireParts
@@ -155,6 +162,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
         className: 'bp-chip bp-chip-locked',
         role: 'button',
         tabIndex: 0,
+        onKeyDown: activateChip,
         title: t('chip.modeOffTitle'),
         onClick: () => {
           try {
@@ -221,6 +229,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
         className: 'bp-chip bp-chip-unknown',
         role: 'button',
         tabIndex: 0,
+        onKeyDown: activateChip,
         title: t('chip.unknownTitle'),
         onClick: (e: any) => {
           if (e?.altKey) {
@@ -245,6 +254,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
         className: 'bp-chip bp-chip-locked',
         role: 'button',
         tabIndex: 0,
+        onKeyDown: activateChip,
         onClick: () => {
           // Verify the phrase against this actual envelope, not solely the
           // saved salt/KCV. This also safely repairs stale local metadata.
@@ -258,7 +268,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
             })
         },
       },
-      t('chip.locked', { label: entry.label }),
+      t('chip.locked', { label: sendKeyLabel(entry) }),
     )
   }
 

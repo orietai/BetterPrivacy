@@ -726,7 +726,10 @@
     return (n / (1024 * 1024)).toFixed(1) + ' MB'
   }
   function safeMime(mime) {
-    return /^[A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream'
+    // Headers are authenticated sender input, not trusted same-origin content.
+    // HTML/SVG/XML must remain inert even if a blob is opened in a new tab.
+    return /^(?:image\/(?:png|jpeg|gif|webp|avif|bmp|x-icon)|audio\/(?:mpeg|ogg|wav|x-wav|mp4|webm|aac|flac)|video\/(?:mp4|webm|ogg))$/i.test(mime)
+      ? mime.toLowerCase() : 'application/octet-stream'
   }
   function renderDownload() {
     if (!savedName) return

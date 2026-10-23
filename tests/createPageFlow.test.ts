@@ -69,6 +69,39 @@ async function makeLink(text = 'Meet at midnight 🦇 <img src=x onerror=alert(1
 }
 
 describe('web create → share → open', () => {
+  it('remasks and clears a revealed phrase before a page is restored from history', () => {
+    const p = page()
+    try {
+      p.input('message', 'private draft')
+      p.input('create-phrase', PHRASE)
+      p.$('show-phrase').click()
+      expect(p.$('create-phrase').type).toBe('text')
+      p.w.dispatchEvent(new p.w.Event('pagehide'))
+      expect(p.$('create-phrase').type).toBe('password')
+      expect(p.$('create-phrase').value).toBe('')
+      expect(p.$('message').value).toBe('')
+      expect(p.$('show-phrase').getAttribute('aria-pressed')).toBe('false')
+      expect(p.$('show-phrase').textContent).toBe('Show')
+      p.input('create-phrase', 'new secret')
+      expect(p.$('create-phrase').type).toBe('password')
+    } finally { p.w.close() }
+  })
+
+  it('reports native-share failures even when the platform rejects without an Error', async () => {
+    const p = page('create/index.html', '', w => { w.navigator.share = async () => { throw null } })
+    try {
+      p.input('message', 'share privately')
+      p.input('create-phrase', PHRASE)
+      p.submit('create-form')
+      await until(() => !p.$('create-submit').disabled)
+      p.$('share-native').click()
+      await until(() => p.$('share-status').classList.contains('err'))
+      expect(p.$('share-status').textContent).toContain('Copy the link instead')
+      expect(p.$('generated').hidden).toBe(false)
+      expect(p.errors).toEqual([])
+    } finally { p.w.close() }
+  })
+
   it('the real composer creates v1 links the plugin and existing reader both decrypt', async () => {
     const plaintext = 'Meet at midnight 🦇 <img src=x onerror=alert(1)>'
     const p = await makeLink(plaintext)

@@ -7,6 +7,10 @@ const root = new URL('../', import.meta.url)
 const read = (path) => readFile(new URL(path, root), 'utf8')
 const manifest = JSON.parse(await read('package.json'))
 const lock = JSON.parse(await read('package-lock.json'))
+const headers = await read('site/_headers')
+for (const required of ['X-Content-Type-Options: nosniff', 'X-Frame-Options: DENY', 'Referrer-Policy: no-referrer', "frame-ancestors 'none'", "base-uri 'none'"]) {
+  if (!headers.includes(required)) throw new Error(`Missing static security header: ${required}`)
+}
 if (lock.version !== manifest.version || lock.packages[''].version !== manifest.version) {
   throw new Error('Package/lock versions disagree')
 }

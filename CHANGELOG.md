@@ -18,6 +18,9 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Discord plugin
 
+- Keyboard activation and visible focus for encrypted-message and attachment controls; channel key labels use readable names with distinct key IDs.
+- Key import respects intervening locks and plugin shutdown before automatically unlocking; active-content attachments are downloaded with an inert MIME type.
+- Ambiguous `/enc` labels and deleted sending keys require explicit selection instead of silently choosing another key.
 - Cancel pending modal and attachment work on lock, stop, or channel changes; dismissing an unlock prompt no longer locks other readers of that key.
 - Read password inputs at confirmation time and prevent cancelled operations from reopening keys or restoring decrypted previews.
 - Intercept message edits, preserve historical encryption keys and block unsafe or oversized edits without a plaintext fallback.
@@ -42,6 +45,8 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Website
 
+- Static-host frame, MIME, referrer and browser-permission restrictions; release verification checks the required header configuration.
+- Reduced-motion reveal controls remain interactive; leaving the composer remasks phrases; native sharing handles unusual rejection values safely.
 - Editing a file's phrase clears decrypted previews and invalidates pending decryption, including late failures.
 - The web reader accepts multiple links and joins authenticated plaintext in pasted order using one phrase, with per-part errors and no partial result. It cannot infer missing parts or their intended order from v1 links.
 - Long messages automatically split into numbered, independently readable v1 links, with per-part copy/open and ordered bulk copy/share. Unicode and whitespace survive unchanged; every link fits Discord's message limit.

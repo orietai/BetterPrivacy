@@ -73,6 +73,12 @@ function chip(className: string, text: string, onClick?: () => void): any {
     props.role = 'button'
     props.tabIndex = 0
     props.onClick = onClick
+    props.onKeyDown = (event: any) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.currentTarget.click()
+      }
+    }
   }
   return BdApi.React.createElement('span', props, text)
 }
@@ -200,13 +206,17 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       }
       if (!current()) return
       const { header, data } = decrypted
+      // Authenticated peers can still send active HTML/SVG. Keep downloads
+      // inert even if a blob URL is opened outside our inline renderer.
+      const previewMime = /^(?:image\/(?:png|jpeg|gif|webp|avif|bmp|x-icon)|audio\/(?:mpeg|ogg|wav|x-wav|mp4|webm|aac|flac)|video\/(?:mp4|webm|ogg))$/i.test(header.mime)
+        ? header.mime.toLowerCase() : 'application/octet-stream'
       const blob = new Blob([data as unknown as BlobPart], {
-        type: header.mime || 'application/octet-stream',
+        type: previewMime,
       })
       blobUrl = URL.createObjectURL(blob)
       // Cache owns the blob URL from here: purge() revokes it (F3), LRU keeps
       // total media under settings.memoryBudgetMB.
-      ctx.cache.set(cacheKey, { kind: 'media', blobUrl, header, keyId, byteSize: data.byteLength })
+      ctx.cache.set(cacheKey, { kind: 'media', blobUrl, header: { ...header, mime: previewMime }, keyId, byteSize: data.byteLength })
       blobUrl = undefined // cache owns the URL only after a successful write
       bytesRef.current = null
       setPhase('done')

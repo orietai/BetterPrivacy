@@ -253,15 +253,10 @@ export function createKeyring(): Keyring {
       const before = entries.length
       entries = entries.filter((e) => e.id !== id)
       if (entries.length !== before) saveEntries()
-      // Drop any per-channel reference to the removed key.
-      let prefsChanged = false
-      for (const pref of Object.values(prefs)) {
-        if (pref.activeKeyId === id) {
-          pref.activeKeyId = null
-          prefsChanged = true
-        }
-      }
-      if (prefsChanged) savePrefs()
+      // Retain the missing selection as a tombstone. Clearing it would let
+      // resolveSendKey silently fall back to a sole historical key, changing
+      // recipients after Forget. Sending stays blocked until an explicit new
+      // choice (or restoration of this same key), including after restart.
     },
 
     getActiveSendKey(channelId: string): string | null {

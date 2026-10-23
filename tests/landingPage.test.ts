@@ -134,4 +134,21 @@ describe('restored animated landing page', () => {
       expect([...doc.querySelectorAll('.reveal')].every(el => el.classList.contains('in'))).toBe(true)
     } finally { dom.window.close() }
   })
+
+  it('keeps the reveal button operable with reduced motion, without scheduling animation', () => {
+    const { dom, doc, errors } = landing(true)
+    try {
+      const animate = vi.spyOn(dom.window, 'requestAnimationFrame')
+      const button = doc.getElementById('sbat') as HTMLButtonElement
+      button.click()
+      expect(button.getAttribute('aria-pressed')).toBe('false')
+      expect(doc.getElementById('statement')?.classList.contains('on')).toBe(false)
+      button.click()
+      expect(button.getAttribute('aria-pressed')).toBe('true')
+      expect(doc.getElementById('statement')?.classList.contains('on')).toBe(true)
+      expect(doc.getElementById('srtext')?.textContent).toBe("what it can't see.")
+      expect(animate).not.toHaveBeenCalled()
+      expect(errors).toEqual([])
+    } finally { dom.window.close() }
+  })
 })

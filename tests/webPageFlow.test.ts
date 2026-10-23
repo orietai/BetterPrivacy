@@ -144,6 +144,27 @@ function openPage(hash = '', configure?: (window: any) => void): Page {
 }
 
 describe('decrypt page: it loads and wires itself up', () => {
+  it.each(['text/html', 'image/svg+xml', 'application/xhtml+xml'])('downloads authenticated %s content as an inert blob without a preview', async mime => {
+    const salt = await deriveSaltFromLabel(CHANNEL_LABEL)
+    const { key, keyId } = await deriveKeyMaterial(PASS, salt)
+    const bytes = await encryptFileToBpenc(key, keyId, salt,
+      new TextEncoder().encode('<script>window.payloadExecuted=true</script>'), 'untrusted.html', mime)
+    const blobs: Blob[] = []
+    const page = openPage('', window => {
+      window.URL.createObjectURL = (blob: Blob) => { blobs.push(blob); return 'blob:inert' }
+    })
+    await page.loadFile(bytes, 'file.bpenc')
+    await page.submit('file-form', 'file-status', 'fphrase', PASS)
+    expect(page.$('file-result').hidden).toBe(false)
+    expect(blobs).toHaveLength(1)
+    expect(blobs[0]!.type).toBe('application/octet-stream')
+    expect(page.$('file-media').childElementCount).toBe(0)
+    expect(page.$('file-media').hidden).toBe(true)
+    expect(page.$('file-dl').getAttribute('download')).toBe('untrusted.html')
+    expect(page.$('file-dl').getAttribute('href')).toBe('blob:inert')
+    expect(page.window.payloadExecuted).toBeUndefined()
+  })
+
   it('evaluates without error and attaches the drop-zone handlers', () => {
     const page = openPage()
     let clicks = 0

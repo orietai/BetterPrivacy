@@ -193,7 +193,7 @@
     var started = revision;
     if (!link || !navigator.share) return;
     try { await navigator.share(links.length > 1 ? { title: 'BetterPrivacy', text: link } : { title: 'BetterPrivacy', url: link }); }
-    catch (err) { if (revision === started && !generated.hidden && err.name !== 'AbortError') say('share-status', 'shareFailed', true); }
+    catch (err) { if (revision === started && !generated.hidden && (!err || err.name !== 'AbortError')) say('share-status', 'shareFailed', true); }
   });
   $('start-over').addEventListener('click', function () {
     form.reset();
@@ -207,5 +207,12 @@
     message.focus();
   });
   // No message, phrase, or link is persisted; only the language preference is shared.
-  window.addEventListener('pagehide', function () { form.reset(); changed(); });
+  window.addEventListener('pagehide', function () {
+    form.reset();
+    phrase.type = 'password';
+    $('show-phrase').setAttribute('aria-pressed', 'false');
+    $('show-phrase').setAttribute('data-copy', 'showPhrase');
+    changed();
+    ui.refresh();
+  });
 })();

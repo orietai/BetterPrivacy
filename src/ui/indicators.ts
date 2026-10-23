@@ -52,6 +52,10 @@ const CSS = `
   background: var(--background-secondary, #2b2d31);
   color: var(--text-normal, #dbdee1);
 }
+.bp-chip:focus-visible {
+  outline: 2px solid var(${INDICATOR_PROP}, #3ba55d);
+  outline-offset: 2px;
+}
 
 /* ---- decryption failure (GCM auth error / tamper) ---------------------- */
 .bp-failed {

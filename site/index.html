@@ -1285,16 +1285,16 @@
       if (on === root.classList.contains('on')) return
       root.classList.toggle('on', on)
       batBtn.setAttribute('aria-pressed', String(on))
-      if (on) scramble(700)
+      if (on && !reduceMotion) scramble(700)
       else { token++; textEl.textContent = TEXT }
     }
 
     if (reduceMotion) {
+      locked = true
       root.classList.add('on')
       batBtn.setAttribute('aria-pressed', 'true')
-      return
     }
-    if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    if (!reduceMotion && matchMedia('(hover: hover) and (pointer: fine)').matches) {
       span.addEventListener('mouseenter', function () { hovering = true; update() })
       span.addEventListener('mouseleave', function () { hovering = false; update() })
     }

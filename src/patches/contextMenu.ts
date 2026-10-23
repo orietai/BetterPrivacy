@@ -17,6 +17,7 @@ import { decryptText } from '../crypto/cipher'
 import { selectSendKey } from '../core/sendKey'
 import { openRecoverKeyModal, openUnlockModal } from '../ui/UnlockModal'
 import { sendKeyLabel } from '../ui/labels'
+import { unlockIfCurrent } from '../core/session'
 
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
@@ -48,6 +49,13 @@ function openImportKeyModal(ctx: PluginContext): void {
   const React = BdApi.React
   let blob = ''
   let passphrase = ''
+  const revision = ctx.session.revision
+  let cancelled = false
+  let confirming = false
+  let started = false
+  const current = (): boolean => !cancelled && ctx.session.revision === revision
+  const cancel = (): void => { cancelled = true; passphrase = '' }
+  ctx.disposers.push(cancel)
 
   const content = React.createElement(
     'div',
@@ -77,24 +85,35 @@ function openImportKeyModal(ctx: PluginContext): void {
       confirmText: t('common.import'),
       cancelText: t('common.cancel'),
       onConfirm: () => {
+        if (started || !current()) return
+        started = true
+        confirming = true
+        const phrase = passphrase
+        const imported = blob.trim()
+        passphrase = ''
         // importBlob verifies the passphrase against the KCV and throws a
         // user-readable Error on any failure (types.ts contract).
         ctx.keyring
-          .importBlob(blob.trim(), passphrase)
+          .importBlob(imported, phrase)
           .then(async (entry: KeyEntry) => {
+            if (!current()) return
             // Passphrase just verified — unlock immediately (no double entry).
             try {
-              await ctx.session.unlock(entry, passphrase)
+              await unlockIfCurrent(ctx.session, entry, phrase, current)
             } catch {
               // Unlock can be done later from the key picker.
             }
+            if (!current()) return
             toast(t('cm.imported', { label: entry.label }), 'success')
             ctx.forceRerender()
           })
           .catch((err: any) => {
+            if (!current()) return
             toast(t('cm.importFailed', { error: err?.message ?? 'unknown error' }), 'error')
           })
       },
+      onCancel: cancel,
+      onCloseCallback: () => { if (!confirming) cancel() },
     })
   } catch (err) {
     console.error('[BetterPrivacy] import modal failed', err)

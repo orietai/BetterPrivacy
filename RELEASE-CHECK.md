@@ -17,6 +17,8 @@ checks site assets, local links, script syntax, version metadata, and that the
 website download matches the plugin build.
 
 The full dependency audit must also be clean, including development tooling.
+GitHub Actions runs this verification on main pushes and pull requests using
+Node.js 24, read-only repository permissions, and no deployment credentials.
 The shipped plugin and static pages do not load the npm test/build dependencies
 at runtime, but contributors and release builders still execute those tools.
 
@@ -63,6 +65,8 @@ plugin disable/enable cycle before proceeding with the full checklist below.
 - [ ] Check the deployed `/`, `/create/`, `/m`, `/m/`, `/terms/`, and
   `/BetterPrivacy.plugin.js` routes over HTTPS. Redirects must preserve the URL
   fragment; the plugin download must serve JavaScript, not an HTML fallback.
+  Confirm the host applies `site/_headers` (frame protection, no-referrer, and
+  nosniff); a plain local file server does not apply Cloudflare header rules.
 
 ## Distribution
 
