@@ -11,8 +11,23 @@
   function canMove() { return !(preference && preference.matches) && !document.hidden; }
   function bat() {
     var node = document.createElement('span');
-    node.textContent = '🦇';
     node.setAttribute('aria-hidden', 'true');
+    var ns = 'http://www.w3.org/2000/svg';
+    var svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 48 32');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('class', 'bp-bat-shape');
+    [
+      ['bp-bat-wing bp-bat-wing-left', 'M23 16C16 7 9 9 2 3C2 14 5 21 10 25Q13 19 17 24Q19 20 23 22Z'],
+      ['bp-bat-wing bp-bat-wing-right', 'M25 16C32 7 39 9 46 3C46 14 43 21 38 25Q35 19 31 24Q29 20 25 22Z'],
+      ['bp-bat-body', 'M20 15L20 8L24 12L28 8L28 15Q31 24 24 29Q17 24 20 15Z'],
+    ].forEach(function (part) {
+      var path = document.createElementNS(ns, 'path');
+      path.setAttribute('class', part[0]);
+      path.setAttribute('d', part[1]);
+      svg.appendChild(path);
+    });
+    node.appendChild(svg);
     return node;
   }
   function dismissIntro() {
@@ -40,17 +55,16 @@
     var count = small ? 5 : 10;
     for (var i = 0; i < count; i++) {
       var node = bat();
-      var angle = (i / count) * Math.PI * 2 - Math.PI / 2;
       node.className = 'bp-bat-flight';
-      node.style.setProperty('--bat-x', Math.round(Math.cos(angle) * 54) + 'vw');
-      node.style.setProperty('--bat-y', Math.round(Math.sin(angle) * 48) + 'vh');
-      node.style.setProperty('--bat-turn', (i % 2 ? 22 : -22) + 'deg');
-      node.style.animationDelay = i * 24 + 'ms';
+      node.style.top = (20 + (i * 13 % 45)) + '%';
+      node.style.width = (small ? 26 : 30 + (i % 3) * 7) + 'px';
+      node.style.setProperty('--bat-rise', (-8 - i % 4 * 4) + 'vh');
+      node.style.animationDelay = i * 35 + 'ms';
       intro.appendChild(node);
     }
     document.body.appendChild(intro);
     // The content is never hidden, made inert, or held until this timeout.
-    introTimer = setTimeout(dismissIntro, 720);
+    introTimer = setTimeout(dismissIntro, 1250);
     document.addEventListener('pointerdown', dismissIntro, true);
     document.addEventListener('keydown', dismissIntro, true);
   }
@@ -65,7 +79,7 @@
     var decoration = document.createElement('span');
     decoration.className = 'bp-bat-working';
     decoration.setAttribute('aria-hidden', 'true');
-    for (var i = 0; i < 3; i++) decoration.appendChild(bat());
+    decoration.appendChild(bat());
     button.classList.add('bp-bat-busy');
     button.appendChild(decoration);
   }

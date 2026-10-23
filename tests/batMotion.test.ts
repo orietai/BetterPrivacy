@@ -34,7 +34,9 @@ describe('bat brand motion', () => {
     expect(layer.hasAttribute('inert')).toBe(true)
     expect(h.doc.querySelector('main').hasAttribute('inert')).toBe(false)
     expect(h.button.disabled).toBe(false)
-    vi.advanceTimersByTime(720)
+    expect(layer.querySelectorAll('svg')).toHaveLength(mobile ? 5 : 10)
+    expect(layer.querySelectorAll('.bp-bat-wing')).toHaveLength(mobile ? 10 : 20)
+    vi.advanceTimersByTime(1250)
     expect(h.doc.querySelector('.bp-bat-welcome')).toBeNull()
     expect(h.w.sessionStorage.getItem('bp-bat-welcome')).toBe('seen')
     expect(h.w.localStorage.length).toBe(0)
@@ -55,6 +57,7 @@ describe('bat brand motion', () => {
     h.button.disabled = true
     await mutations()
     expect(h.button.querySelectorAll('.bp-bat-working')).toHaveLength(1)
+    expect(h.button.querySelectorAll('.bp-bat-working svg')).toHaveLength(1)
     h.button.textContent = 'Çöz'
     await mutations()
     expect(h.button.querySelectorAll('.bp-bat-working')).toHaveLength(1)
