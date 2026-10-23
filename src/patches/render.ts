@@ -277,6 +277,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
 }
 
 export function applyRenderPatch(ctx: PluginContext): void {
+  startRenderRecovery(ctx)
   const { modules } = ctx
   const target = modules.MessageContent
 
@@ -320,4 +321,86 @@ export function applyRenderPatch(ctx: PluginContext): void {
       return ret
     }
   })
+}
+
+const recoveryOwners = new WeakSet<PluginContext>()
+
+/** Discord can retain an old memoized render function after an edit. Recover
+ * raw wire nodes with a separate root; never mutate its message/Flux record. */
+export function startRenderRecovery(ctx: PluginContext): void {
+  if (typeof document === 'undefined' || !BdApi.ReactDOM?.createRoot || recoveryOwners.has(ctx)) return
+  recoveryOwners.add(ctx)
+  type Mount = { host: HTMLElement; root: any; display: string; content: string }
+  const mounts = new Map<HTMLElement, Mount>()
+  let stopped = false
+  let frame: number | null = null
+  const remove = (node: HTMLElement, mount: Mount): void => {
+    mounts.delete(node)
+    try { mount.root.unmount() } finally { mount.host.remove(); node.style.display = mount.display }
+  }
+  const scan = (): void => {
+    frame = null
+    if (stopped) return
+    const seen = new Set<HTMLElement>()
+    const channelId = resolveCurrentChannelId(ctx.modules)
+    if (channelId) for (const node of document.querySelectorAll<HTMLElement>('[id^="message-content-"]')) {
+      if (node.closest('.bp-text-host') || node.querySelector('.bp-decrypted,.bp-chip,.bp-failed')) continue
+      const id = node.id.slice('message-content-'.length)
+      const message = ctx.modules.MessageStore?.getMessage?.(channelId, id)
+      const content = message?.content
+      const parts = typeof content === 'string' ? parseWire(content) : null
+      if (!parts || !node.parentElement) continue
+      // A substring/link inside an ordinary message is never enough. Both
+      // the store envelope and the displayed anchor must agree exactly.
+      const matches = [...node.querySelectorAll<HTMLAnchorElement>('a[href]')].some(anchor => {
+        const candidate = parseWire(anchor.href)
+        return candidate && candidate.keyId === parts.keyId && candidate.salt === parts.salt &&
+          candidate.iv === parts.iv && candidate.ciphertext === parts.ciphertext
+      })
+      if (!matches) continue
+      seen.add(node)
+      let mount = mounts.get(node)
+      if (mount && (!mount.host.isConnected || mount.host.parentElement !== node.parentElement)) {
+        remove(node, mount); mount = undefined
+      }
+      if (!mount) {
+        const host = document.createElement('span')
+        host.className = 'bp-text-host'
+        node.insertAdjacentElement('afterend', host)
+        mount = { host, root: BdApi.ReactDOM.createRoot(host), display: node.style.display, content: '' }
+        mounts.set(node, mount)
+      }
+      if (mount.content !== content) {
+        const editTs = message.editedTimestamp?.valueOf?.() ?? null
+        const cacheKey = `${ctx.cache.key(id, editTs)}:${content}`
+        mount.root.render(BdApi.React.createElement(EncryptedContent, {
+          key: cacheKey, ctx, parts, rawContent: content, channelId, cacheKey,
+        }))
+        mount.content = content
+      }
+      node.style.display = 'none'
+    }
+    for (const [node, mount] of mounts) if (!node.isConnected || !seen.has(node)) remove(node, mount)
+  }
+  const schedule = (): void => {
+    if (!stopped && frame === null) frame = requestAnimationFrame(() => {
+      try { scan() } catch { /* Next mutation can retry; keep Discord usable. */ }
+    })
+  }
+  const observer = new MutationObserver(schedule)
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['href'] })
+  window.addEventListener('bp-rerender', schedule)
+  const store = ctx.modules.MessageStore
+  const listen = typeof store?.addChangeListener === 'function' && typeof store?.removeChangeListener === 'function'
+  if (listen) store.addChangeListener(schedule)
+  ctx.disposers.push(() => {
+    stopped = true
+    observer.disconnect()
+    window.removeEventListener('bp-rerender', schedule)
+    if (listen) store.removeChangeListener(schedule)
+    if (frame !== null) cancelAnimationFrame(frame)
+    for (const [node, mount] of mounts) remove(node, mount)
+    recoveryOwners.delete(ctx)
+  })
+  schedule()
 }

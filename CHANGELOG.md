@@ -18,6 +18,7 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Discord plugin
 
+- Recover raw encrypted text after in-place Discord edits without channel navigation, matching the visible link to the stored envelope and restoring native nodes on stop.
 - One successful phrase entry opens matching saved history keys in the current channel without changing the sending selection.
 - Remove unused master-passphrase and link-preview settings; keep media limits in a collapsed settings section.
 - Keyboard activation and visible focus for encrypted-message and attachment controls; channel key labels use readable names with distinct key IDs.
