@@ -231,6 +231,9 @@ const CSS = `
 .bp-settings {
   color: var(--text-normal, #dbdee1);
   padding: 4px 0 16px;
+  min-width: 0;
+  max-width: 100%;
+  container: bp-settings / inline-size;
 }
 .bp-settings h3 {
   color: var(--header-primary, #f2f3f5);
@@ -240,6 +243,7 @@ const CSS = `
 }
 .bp-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -248,11 +252,65 @@ const CSS = `
   text-align: left;
   padding: 6px 8px;
   border-bottom: 1px solid var(--background-modifier-accent, rgba(78, 80, 88, 0.48));
+  overflow-wrap: anywhere;
+  vertical-align: top;
 }
 .bp-table th {
   color: var(--header-secondary, #b5bac1);
   font-size: 11px;
   text-transform: uppercase;
+}
+.bp-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.bp-key-actions, .bp-key-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.bp-key-toolbar { margin-top: 12px; }
+.bp-settings .bp-btn {
+  max-width: 100%;
+  min-height: 32px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* Use the panel width, not the Discord window width: settings can be modal. */
+@container bp-settings (max-width: 620px) {
+  .bp-table, .bp-table tbody { display: block; }
+  .bp-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .bp-table tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--background-modifier-accent, rgba(78, 80, 88, 0.48));
+  }
+  .bp-table td { min-width: 0; padding: 0; border: 0; }
+  .bp-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-muted, #949ba4);
+    font-size: 11px;
+  }
+  .bp-table .bp-key-label, .bp-table .bp-key-actions-cell, .bp-table .bp-key-empty { grid-column: 1 / -1; }
+  .bp-table .bp-key-label { font-weight: 600; }
 }
 .bp-row {
   display: flex;
@@ -266,32 +324,8 @@ const CSS = `
   font-size: 12px;
   margin-top: 2px;
 }
-.bp-language-options {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-.bp-language-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 5px 9px;
-  border: 1px solid var(--background-modifier-accent, #4e5058);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-}
-.bp-language-option:has(input:checked) {
-  border-color: var(${INDICATOR_PROP}, #3ba55d);
-  background: var(--background-modifier-selected, rgba(78, 80, 88, .3));
-}
-.bp-language-option:focus-within {
-  outline: 2px solid var(${INDICATOR_PROP}, #3ba55d);
-  outline-offset: 2px;
-}
-.bp-language-option input { margin: 0; accent-color: var(${INDICATOR_PROP}, #3ba55d); }
+.bp-setting-dropdown { width: 230px; max-width: 40vw; }
+.bp-setting-dropdown > .bd-select { width: 100%; }
 .bp-btn {
   background: var(${INDICATOR_PROP}, #3ba55d);
   color: #fff;

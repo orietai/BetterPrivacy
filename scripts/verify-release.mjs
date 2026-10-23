@@ -33,6 +33,12 @@ for (const [route, path] of Object.entries(routes)) {
 
 for (const [route, doc] of docs) {
   if (doc.querySelectorAll('h1').length !== 1) throw new Error(`${route}: expected one page heading`)
+  const languages = [...doc.querySelectorAll('button[type="button"][data-lang]')]
+    .map((node) => node.getAttribute('data-lang')).sort()
+  if (languages.join(',') !== 'en,ru,tr') throw new Error(`${route}: EN/TR/RU language controls missing or duplicated`)
+  if (!doc.querySelector('link[rel="stylesheet"][href="/assets/controls.css"]')) {
+    throw new Error(`${route}: shared control stylesheet is missing`)
+  }
   const ids = [...doc.querySelectorAll('[id]')].map((node) => node.id)
   if (new Set(ids).size !== ids.length) throw new Error(`${route}: duplicate element IDs`)
   for (const node of doc.querySelectorAll('a[href],script[src],img[src],link[rel=stylesheet]')) {

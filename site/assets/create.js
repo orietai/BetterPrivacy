@@ -9,6 +9,7 @@
   var generated = $('generated');
   var busy = false;
   var revision = 0;
+  var links = [];
   var MAX_BYTES = 1360; // Plugin CHUNK_UTF8_BYTES: one link fits Discord's 2,000 characters.
   var ui = window.BPUI;
   function say(id, key, error) {
@@ -22,9 +23,37 @@
     return btoa(out).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   }
   function byteLength(text) { return new TextEncoder().encode(text).length; }
+  // Keep boundaries identical to src/crypto/wire.ts: lossless UTF-8 chunks,
+  // whole code points, preferring whitespace in the latter 40% of a part.
+  function chunkPlaintext(text) {
+    var chunks = [], start = 0, i = 0, bytes = 0, breakAt = -1, breakBytes = 0;
+    while (i < text.length) {
+      var cp = text.codePointAt(i);
+      var units = cp > 0xffff ? 2 : 1;
+      var size = cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
+      if (bytes + size > MAX_BYTES) {
+        var cut = breakAt > start && breakBytes >= MAX_BYTES * 0.6 ? breakAt : i;
+        chunks.push(text.slice(start, cut));
+        start = i = cut;
+        bytes = 0; breakAt = -1; breakBytes = 0;
+        continue;
+      }
+      bytes += size; i += units;
+      if (cp === 0x20 || cp === 0x0a || cp === 0x09) { breakAt = i; breakBytes = bytes; }
+    }
+    chunks.push(text.slice(start));
+    return chunks;
+  }
+  function budget() {
+    var count = chunkPlaintext(message.value).length;
+    $('message-budget').textContent = byteLength(message.value).toLocaleString(document.documentElement.lang) +
+      ' ' + ui.text('bytesLabel') + ' · ' + count + ' ' + ui.text(count > 1 ? 'linksCount' : 'linkCount');
+  }
   function clearLink() {
+    links = [];
     generated.hidden = true;
     $('share-link').value = '';
+    $('generated-parts').replaceChildren();
     $('open-created').removeAttribute('href');
     $('share-status').textContent = '';
     $('share-status').removeAttribute('data-copy');
@@ -36,11 +65,10 @@
       $('create-status').textContent = '';
       $('create-status').removeAttribute('data-copy');
     }
-    var bytes = byteLength(message.value);
-    $('message-budget').textContent = bytes.toLocaleString() + ' / 1,360 bytes';
-    $('message-budget').classList.toggle('over', bytes > MAX_BYTES);
-    message.setAttribute('aria-invalid', String(bytes > MAX_BYTES));
+    budget();
   }
+  window.addEventListener('bp-language-change', budget);
+  budget();
   message.addEventListener('input', changed);
   phrase.addEventListener('input', changed);
   $('show-phrase').addEventListener('click', function () {
@@ -53,22 +81,23 @@
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
     if (busy) return;
+    revision++;
     clearLink();
     if (!message.value.trim()) { say('create-status', 'messageEmpty', true); message.focus(); return; }
-    if (byteLength(message.value) > MAX_BYTES) { say('create-status', 'messageLong', true); message.focus(); return; }
     if (!phrase.value.trim()) { say('create-status', 'phraseEmpty', true); phrase.focus(); return; }
     if (!window.crypto || !crypto.subtle) { say('create-status', 'secureOrigin', true); return; }
     busy = true;
     submit.disabled = true;
     form.setAttribute('aria-busy', 'true');
     var current = revision;
-    var plainBytes = new TextEncoder().encode(message.value);
+    var chunks = chunkPlaintext(message.value);
+    var plainBytes = null;
     var raw = null;
     say('create-status', 'encrypting');
     try {
-      // Random salt per message; the v1 URL carries it so no channel or stored keyring is needed.
+      // One fresh salt per submission, one derivation for all parts. Each URL
+      // remains a standalone v1 message with its own fresh AES-GCM nonce.
       var salt = crypto.getRandomValues(new Uint8Array(16));
-      var iv = crypto.getRandomValues(new Uint8Array(12));
       var passBytes = new TextEncoder().encode(phrase.value);
       var pk;
       try { pk = await crypto.subtle.importKey('raw', passBytes, 'PBKDF2', false, ['deriveBits']); }
@@ -78,50 +107,92 @@
       var keyId = b64(digest.subarray(0, 6));
       var key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['encrypt']);
       raw.fill(0);
-      var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, plainBytes));
+      var pending = [];
+      for (var n = 0; n < chunks.length; n++) {
+        if (revision !== current) { say('create-status', 'changedWhileEncrypting', true); return; }
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        plainBytes = new TextEncoder().encode(chunks[n]);
+        var ct;
+        try { ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, plainBytes)); }
+        finally { plainBytes.fill(0); }
+        var fragment = '#v1.' + keyId + '.' + b64(salt) + '.' + b64(iv) + '.' + b64(ct);
+        var link = 'https://betterprivacy.app/m' + fragment;
+        if (('🦇<' + link + '>').length > 2000) throw new Error('oversize');
+        pending.push(link);
+      }
       if (revision !== current) { say('create-status', 'changedWhileEncrypting', true); return; }
-      var fragment = '#v1.' + keyId + '.' + b64(salt) + '.' + b64(iv) + '.' + b64(ct);
-      var link = 'https://betterprivacy.app/m' + fragment;
-      if (('🦇<' + link + '>').length > 2000) throw new Error('oversize');
-      $('share-link').value = link;
+      // Publish atomically: never expose an incomplete or obsolete set of parts.
+      links = pending;
+      $('share-link').value = links.join('\n');
+      var multi = links.length > 1;
+      $('share-link').rows = multi ? 5 : 3;
+      say('generated-title', multi ? 'readyManyTitle' : 'readyTitle');
+      say('ready-help', multi ? 'readyManyHelp' : 'readyHelp');
+      say('share-link-label', multi ? 'linksLabel' : 'linkLabel');
+      say('copy-link', multi ? 'copyAllLinks' : 'copyLink');
+      $('generated-parts').hidden = !multi;
+      if (multi) links.forEach(function (part, index) {
+        var row = document.createElement('li');
+        var label = document.createElement('span');
+        label.setAttribute('data-copy', 'partLabel');
+        label.textContent = ui.text('partLabel');
+        var heading = document.createElement('p');
+        heading.append(label, ' ' + (index + 1) + ' / ' + links.length);
+        var actions = document.createElement('div');
+        actions.className = 'actions';
+        var copy = document.createElement('button');
+        copy.type = 'button'; copy.className = 'button secondary compact';
+        copy.setAttribute('data-copy', 'copyLink'); copy.textContent = ui.text('copyLink');
+        copy.addEventListener('click', function () { copyLinks(part, current); });
+        var open = document.createElement('a');
+        open.className = 'button secondary compact'; open.target = '_blank'; open.rel = 'noopener noreferrer';
+        open.href = '/m/' + new URL(part).hash;
+        open.setAttribute('data-copy', 'openPart'); open.textContent = ui.text('openPart');
+        row.append(heading, actions); actions.append(copy, open);
+        $('generated-parts').append(row);
+      });
       // Local preview opens the local reader; the copied link always uses the public domain.
-      $('open-created').href = '/m/' + fragment;
+      $('open-created').href = '/m/' + new URL(links[0]).hash;
+      $('open-created').hidden = multi;
       $('share-native').hidden = typeof navigator.share !== 'function';
       generated.hidden = false;
-      say('create-status', 'encrypted');
+      say('create-status', multi ? 'encryptedMany' : 'encrypted');
       $('generated-title').focus();
     } catch (_) {
       say('create-status', 'encryptFailed', true);
     } finally {
       if (raw) raw.fill(0);
-      plainBytes.fill(0);
+      if (plainBytes) plainBytes.fill(0);
       submit.disabled = false;
       busy = false;
       form.removeAttribute('aria-busy');
     }
   });
-  $('copy-link').addEventListener('click', async function () {
-    var link = $('share-link').value;
-    var started = revision;
+  async function copyLinks(link, started) {
     if (!link) return;
-    function current() { return revision === started && !generated.hidden && $('share-link').value === link; }
+    function current() { return revision === started && !generated.hidden; }
+    if (!current()) return;
     try {
       if (!navigator.clipboard) throw new Error('clipboard unavailable');
       await navigator.clipboard.writeText(link);
       if (!current()) return;
-      say('share-status', 'linkCopied');
+      say('share-status', link.includes('\n') ? 'linksCopied' : 'linkCopied');
     } catch (_) {
       if (!current()) return;
       $('share-link').focus();
-      $('share-link').select();
-      say('share-status', 'copyManually');
+      var offset = $('share-link').value.indexOf(link);
+      $('share-link').setSelectionRange(offset, offset + link.length);
+      say('share-status', link.includes('\n') ? 'copyManyManually' : 'copyManually');
     }
+  }
+  $('copy-link').addEventListener('click', function () {
+    copyLinks($('share-link').value, revision);
   });
   $('share-native').addEventListener('click', async function () {
     var link = $('share-link').value;
     var started = revision;
     if (!link || !navigator.share) return;
-    try { await navigator.share({ title: 'BetterPrivacy', url: link }); }
+    try { await navigator.share(links.length > 1 ? { title: 'BetterPrivacy', text: link } : { title: 'BetterPrivacy', url: link }); }
     catch (err) { if (revision === started && !generated.hidden && err.name !== 'AbortError') say('share-status', 'shareFailed', true); }
   });
   $('start-over').addEventListener('click', function () {

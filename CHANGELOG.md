@@ -17,11 +17,13 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Discord plugin
 
+- Key Manager adapts to the settings panel width: compact stacked key details in narrow modals, wrapped identifiers and actions, and a wrapping toolbar.
+
 - One 🦇 button for setting a phrase, unlocking, and pausing encryption.
 - Visible per-channel sending key with an explicit picker; reading older messages never changes it.
 - Reply-key actions select a key without sending a message; history can stay unlocked with multiple keys.
 - Shared text/file key selection, cancelled-unlock protection, and no guessing between multiple keys.
-- Direct language choices instead of native popup menus; chat-bar DOM fallback also starts when the webpack lookup is missing.
+- Language and relock-scope choices use BetterDiscord's own DropdownInput rather than native Electron select popups; chat-bar DOM fallback also starts when the webpack lookup is missing.
 - Context actions for changing a phrase, forgetting a key, and locking all keys.
 - Encrypted attachment upload and inline decrypted media.
 - `/pt` overrides text only; attachments follow channel mode. Missing upload hooks block normal file-selection/drop/paste flows while encryption is armed.
@@ -33,6 +35,12 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Website
 
+- The web reader accepts multiple links and joins authenticated plaintext in pasted order using one phrase, with per-part errors and no partial result. It cannot infer missing parts or their intended order from v1 links.
+
+- Long messages automatically split into numbered, independently readable v1 links, with per-part copy/open and ordered bulk copy/share. Unicode and whitespace survive unchanged; every link fits Discord's message limit.
+
+- Shared button hierarchy across message creation, decryption and file download; responsive result actions and consistent phrase visibility controls.
+- Restored EN/TR/RU landing-page language controls, including translated animated states and persistent language preference across tools.
 - Official oriet.ai attribution and locally served logo with pointer-gated hover effects.
 
 - Browser message creation at `/create/`, with copy and native sharing.

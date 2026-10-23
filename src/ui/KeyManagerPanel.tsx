@@ -38,6 +38,34 @@ function Row(props: { label: string; hint?: string; children?: any }): JSX.Eleme
   )
 }
 
+/** Keep settings choices inside BetterDiscord's supported popup mechanism.
+ * Raw HTML selects open a separate native popup in Electron, outside the
+ * settings modal's DOM. Do not reintroduce them (or a per-field workaround).
+ * This top-level component has stable identity across parent re-renders.
+ */
+function SettingsDropdown(props: {
+  label: string
+  value: string
+  options: Array<{ label: string; value: string }>
+  onChange: (value: string) => void
+}): JSX.Element {
+  const Dropdown = BdApi.Components?.DropdownInput
+  if (!Dropdown) return <div className="bp-hint" role="status">{t('km.dropdownUnavailable')}</div>
+  return (
+    <div className="bp-setting-dropdown" role="group" aria-label={props.label}>
+      {BdApi.React.createElement(Dropdown, {
+        value: props.value,
+        options: props.options,
+        onChange: (value: unknown) => {
+          // The host callback provides the value, NOT a DOM change event.
+          if (typeof value !== 'string' || value === props.value) return
+          if (props.options.some(option => option.value === value)) props.onChange(value)
+        },
+      })}
+    </div>
+  )
+}
+
 /** Parses a number input's value; returns `fallback` for NaN/negative junk. */
 function toNonNegativeInt(raw: string, fallback: number): number {
   const n = Math.floor(Number(raw))
@@ -181,38 +209,40 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
       )}
 
       <h3>{t('km.title')}</h3>
-      <table className="bp-table">
-        <thead>
-          <tr>
-            <th>{t('km.th.label')}</th>
-            <th>{t('km.th.keyId')}</th>
-            <th>{t('km.th.scope')}</th>
-            <th>{t('km.th.created')}</th>
-            <th></th>
+      <table className="bp-table" role="table" aria-label={t('km.title')}>
+        <thead role="rowgroup">
+          <tr role="row">
+            <th scope="col" role="columnheader">{t('km.th.label')}</th>
+            <th scope="col" role="columnheader">{t('km.th.keyId')}</th>
+            <th scope="col" role="columnheader">{t('km.th.scope')}</th>
+            <th scope="col" role="columnheader">{t('km.th.created')}</th>
+            <th scope="col" role="columnheader"><span className="bp-visually-hidden">{t('km.th.actions')}</span></th>
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup">
           {keys.map((k) => (
-            <tr key={k.id}>
-              <td>{k.label}</td>
-              <td>
+            <tr key={k.id} role="row">
+              <td role="cell" className="bp-key-label" data-label={t('km.th.label')}>{k.label}</td>
+              <td role="cell" data-label={t('km.th.keyId')}>
                 <code>{k.id}</code>
               </td>
-              <td>{k.scope === 'global' ? t('km.scope.global') : k.scope}</td>
-              <td>{new Date(k.createdAt).toLocaleDateString()}</td>
-              <td style={{ whiteSpace: 'nowrap' }}>
+              <td role="cell" data-label={t('km.th.scope')}>{k.scope === 'global' ? t('km.scope.global') : k.scope}</td>
+              <td role="cell" data-label={t('km.th.created')}>{new Date(k.createdAt).toLocaleDateString()}</td>
+              <td role="cell" className="bp-key-actions-cell">
+                <div className="bp-key-actions">
                 <button className="bp-btn bp-btn-secondary" onClick={() => exportKey(k.id)}>
                   {t('km.export')}
-                </button>{' '}
+                </button>
                 <button className="bp-btn bp-btn-danger" onClick={() => deleteKey(k.id, k.label)}>
                   {t('common.delete')}
                 </button>
+                </div>
               </td>
             </tr>
           ))}
           {keys.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="bp-hint">
+            <tr role="row">
+              <td role="cell" colSpan={5} className="bp-hint bp-key-empty">
                 {t('km.noKeys')}
               </td>
             </tr>
@@ -220,7 +250,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         </tbody>
       </table>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      <div className="bp-key-toolbar">
         <button className="bp-btn" onClick={() => void openCreateKeyModal(ctx).then(() => bump())}>
           {t('km.newKey')}
         </button>
@@ -245,28 +275,20 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
 
       <h3>{t('km.section.language')}</h3>
       <Row label={t('km.language')} hint={t('km.languageHint')}>
-        <div className="bp-language-options" role="radiogroup" aria-label={t('km.language')}>
-          {([
-            ['auto', t('km.language.auto')],
-            ['en', 'English'],
-            ['tr', 'Türkçe'],
-            ['ru', 'Русский'],
-          ] as const).map(([value, label]) => (
-            <label key={value} className="bp-language-option">
-              <input
-                type="radio"
-                name="bp-plugin-language"
-                value={value}
-                checked={settings.language === value}
-                onChange={() => {
-                  patch({ language: value })
-                  ctx.forceRerender()
-                }}
-              />
-              {label}
-            </label>
-          ))}
-        </div>
+        <SettingsDropdown
+          label={t('km.language')}
+          value={settings.language}
+          options={[
+            { value: 'auto', label: t('km.language.auto') },
+            { value: 'en', label: 'English' },
+            { value: 'tr', label: 'Türkçe' },
+            { value: 'ru', label: 'Русский' },
+          ]}
+          onChange={(language) => {
+            patch({ language: language as SettingsData['language'] })
+            ctx.forceRerender()
+          }}
+        />
       </Row>
 
       <h3>{t('km.section.session')}</h3>
@@ -279,15 +301,15 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
       </Row>
       {settings.lockdown ? (
         <Row label={t('km.relockScope')} hint={t('km.relockScopeHint')}>
-          <select
-            className="bp-modal-input"
-            style={{ width: 'auto', margin: 0 }}
+          <SettingsDropdown
+            label={t('km.relockScope')}
             value={settings.relockScope}
-            onChange={(e: any) => patch({ relockScope: e.target.value })}
-          >
-            <option value="all">{t('km.relock.all')}</option>
-            <option value="previousChannelOnly">{t('km.relock.prev')}</option>
-          </select>
+            options={[
+              { value: 'all', label: t('km.relock.all') },
+              { value: 'previousChannelOnly', label: t('km.relock.prev') },
+            ]}
+            onChange={(relockScope) => patch({ relockScope: relockScope as SettingsData['relockScope'] })}
+          />
         </Row>
       ) : null}
       <Row label={t('km.timeout')} hint={t('km.timeoutHint')}>

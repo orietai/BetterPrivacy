@@ -37,17 +37,28 @@
     faq5q: ['Şifreli dosyayı burada açabilir miyim?', 'Можно открыть зашифрованный файл?'], faq5a: ['Evet. Aldığın .bpenc dosyasını indir ve Aç sayfasında seç. Dosya kendi cihazında çözülür.', 'Да. Скачайте файл .bpenc и выберите его на странице открытия. Он расшифруется на вашем устройстве.'], openFile: ['Dosya aç', 'Открыть файл'],
     createTab: ['Oluştur', 'Создать'], openTab: ['Aç', 'Открыть'], createTitle: ['Bazı şeyler aranızda kalsın.', 'Некоторые вещи — только между вами.'], createLead: ['Mesajını özel bir bağlantıya dönüştür. Yalnızca gizli ifadeyi bilenler açabilsin.', 'Превратите сообщение в приватную ссылку. Открыть её сможет только тот, кто знает фразу.'],
     nextTitle: ['Sonra ne olacak?', 'Что дальше?'], nextBody: ['Bağlantıyı istediğin sohbette gönder. İfadeyi ayrı paylaş. Alıcın hiçbir şey kurmadan telefonda açabilir.', 'Отправьте ссылку в любом чате, а фразу передайте отдельно. Получатель откроет сообщение на телефоне без установки.'],
-    composeTitle: ['Özel mesajını yaz', 'Напишите приватное сообщение'], messageLabel: ['Mesajın', 'Ваше сообщение'], messagePlaceholder: ['Aranızda ne kalsın?', 'Что должно остаться между вами?'], limitHint: ['Bir mesaj, bir bağlantı.', 'Одно сообщение, одна ссылка.'],
+    composeTitle: ['Özel mesajını yaz', 'Напишите приватное сообщение'], messageLabel: ['Mesajın', 'Ваше сообщение'], messagePlaceholder: ['Aranızda ne kalsın?', 'Что должно остаться между вами?'], limitHint: ['Uzun mesajlar otomatik olarak bağlantılara bölünür.', 'Длинные сообщения автоматически делятся на ссылки.'],
     phraseLabel: ['Gizli ifade', 'Секретная фраза'], showPhrase: ['Göster', 'Показать'], hidePhrase: ['Gizle', 'Скрыть'], phraseHelp: ['Uzun ve benzersiz bir ifade kullan. Boşluklar ve büyük/küçük harf önemlidir. Bağlantıdan ayrı paylaş.', 'Используйте длинную уникальную фразу. Пробелы и регистр важны. Передайте её отдельно от ссылки.'],
-    encryptCta: ['Şifrele ve bağlantı oluştur', 'Зашифровать и создать ссылку'], readyTitle: ['Özel bağlantın hazır.', 'Ваша приватная ссылка готова.'], readyHelp: ['Bu bağlantıyı paylaş. İfadeyi alıcına ayrı ilet.', 'Поделитесь ссылкой. Фразу передайте отдельно.'], linkLabel: ['Şifreli mesaj bağlantısı', 'Ссылка на зашифрованное сообщение'], copyLink: ['Bağlantıyı kopyala', 'Копировать ссылку'], shareLink: ['Paylaş…', 'Поделиться…'], testLink: ['Bu mesajı aç', 'Открыть это сообщение'], startOver: ['Başka bir mesaj yaz', 'Написать ещё сообщение'],
+    encryptCta: ['Şifrele ve bağlantıları oluştur', 'Зашифровать и создать ссылки'], readyTitle: ['Özel bağlantın hazır.', 'Ваша приватная ссылка готова.'], readyHelp: ['Bu bağlantıyı paylaş. İfadeyi alıcına ayrı ilet.', 'Поделитесь ссылкой. Фразу передайте отдельно.'], linkLabel: ['Şifreli mesaj bağlantısı', 'Ссылка на зашифрованное сообщение'], copyLink: ['Bağlantıyı kopyala', 'Копировать ссылку'], shareLink: ['Paylaş…', 'Поделиться…'], testLink: ['Bu mesajı aç', 'Открыть это сообщение'], startOver: ['Başka bir mesaj yaz', 'Написать ещё сообщение'],
     noExpiry: ['Bu bağlantının süresi dolmaz. Bağlantıya ve ifadeye sahip olan herkes okuyabilir.', 'Ссылка не истекает. Любой, у кого есть ссылка и фраза, сможет прочитать сообщение.'], localNote: ['Şifreleme bu sekmede yapılır. Mesajın ve ifaden sunucumuza gönderilmez.', 'Шифрование выполняется в этой вкладке. Сообщение и фраза не отправляются на наш сервер.'],
     receivedLink: ['Sana bağlantı mı geldi? Burada aç.', 'Получили ссылку? Откройте здесь.'], discordShortcut: ['BetterPrivacy’yi Discord’da kullan', 'BetterPrivacy в Discord'],
     readerTitle: ['Sana özel bir mesaj var.', 'Вам личное сообщение.'], readerLead: ['Bağlantıyı aç, gizli ifadeyi gir. Mesaj cihazında çözülsün.', 'Откройте ссылку и введите фразу. Сообщение расшифруется на вашем устройстве.'],
-    pasteLabel: ['BetterPrivacy bağlantısı', 'Ссылка BetterPrivacy'], pasteCta: ['Bağlantıyı aç', 'Открыть ссылку'], pasteHelp: ['Aldığın bağlantının tamamını buraya yapıştır.', 'Вставьте полученную ссылку целиком.'], newMessage: ['Sen de özel bir mesaj oluştur.', 'Создайте своё приватное сообщение.'], hideMessage: ['Mesajı gizle', 'Скрыть сообщение']
+    pasteLabel: ['BetterPrivacy bağlantıları', 'Ссылки BetterPrivacy'], pasteCta: ['Bağlantıları yükle', 'Загрузить ссылки'], pasteHelp: ['Bir veya daha fazla tam bağlantıyı mesaj sırasıyla yapıştır. Parçalar yapıştırdığın sırayla birleştirilir; eksik parçalar tespit edilemez.', 'Вставьте одну или несколько полных ссылок в порядке сообщения. Части объединяются в порядке вставки; пропущенные части определить невозможно.'], newMessage: ['Sen de özel bir mesaj oluştur.', 'Создайте своё приватное сообщение.'], hideMessage: ['Mesajı gizle', 'Скрыть сообщение']
   };
   var messages = {
     messageEmpty: ['Write a message first.', 'Önce bir mesaj yaz.', 'Сначала напишите сообщение.'],
-    messageLong: ['This message is too long for one link. Shorten it to 1,360 UTF-8 bytes; emoji can use several bytes.', 'Mesaj tek bağlantı için uzun. 1.360 UTF-8 baytına kısalt; emojiler birden fazla bayt kullanabilir.', 'Сообщение слишком длинное. Сократите до 1 360 байт UTF-8; эмодзи занимают несколько байт.'],
+    bytesLabel: ['bytes', 'bayt', 'байт'],
+    linkCount: ['link', 'bağlantı', 'ссылка'],
+    linksCount: ['links', 'bağlantı', 'ссылок'],
+    readyManyTitle: ['Your private links are ready.', 'Özel bağlantıların hazır.', 'Ваши приватные ссылки готовы.'],
+    readyManyHelp: ['Send each link as a separate message, in order. Paste all links into Open to read them together with the same phrase. Share the phrase separately.', 'Her bağlantıyı sırasıyla ayrı mesaj olarak gönder. Aynı ifadeyle birlikte okumak için tümünü Aç sayfasına yapıştır. İfadeyi ayrı paylaş.', 'Отправьте каждую ссылку отдельным сообщением по порядку. Вставьте все ссылки на странице открытия, чтобы прочитать их вместе с той же фразой. Передайте фразу отдельно.'],
+    linksLabel: ['All encrypted links, in order', 'Tüm şifreli bağlantılar, sırasıyla', 'Все зашифрованные ссылки по порядку'],
+    copyAllLinks: ['Copy all links', 'Tüm bağlantıları kopyala', 'Копировать все ссылки'],
+    partLabel: ['Part', 'Parça', 'Часть'],
+    openPart: ['Open part', 'Parçayı aç', 'Открыть часть'],
+    encryptedMany: ['Encrypted. All parts are ready below.', 'Şifrelendi. Tüm parçalar aşağıda hazır.', 'Зашифровано. Все части готовы ниже.'],
+    linksCopied: ['All links copied in order. Send them separately; share the phrase separately too.', 'Tüm bağlantılar sırayla kopyalandı. Ayrı mesajlar olarak gönder; ifadeyi de ayrı paylaş.', 'Все ссылки скопированы по порядку. Отправьте их отдельными сообщениями, а фразу передайте отдельно.'],
+    copyManyManually: ['Copy the selected links manually — clipboard access is unavailable here.', 'Pano erişimi yok. Seçili bağlantıları elle kopyala.', 'Буфер обмена недоступен. Скопируйте выделенные ссылки вручную.'],
     phraseEmpty: ['Enter a secret phrase.', 'Gizli bir ifade gir.', 'Введите секретную фразу.'],
     secureOrigin: ['Open this page over HTTPS or localhost to use browser encryption.', 'Tarayıcıda şifreleme için bu sayfayı HTTPS veya localhost üzerinden aç.', 'Для шифрования откройте страницу через HTTPS или localhost.'],
     encrypting: ['Encrypting on your device…', 'Cihazında şifreleniyor…', 'Шифруем на вашем устройстве…'],
@@ -71,6 +82,7 @@
     document.querySelectorAll('[data-copy-placeholder]').forEach(function (node) { node.placeholder = text(node.getAttribute('data-copy-placeholder')); });
     document.querySelectorAll('[data-lang]').forEach(function (node) { node.setAttribute('aria-pressed', String(node.getAttribute('data-lang') === lang)); });
     document.documentElement.lang = lang;
+    window.dispatchEvent(new CustomEvent('bp-language-change', { detail: { lang: lang } }));
   }
   function apply(code) {
     lang = /^(en|tr|ru)$/.test(code) ? code : 'en';

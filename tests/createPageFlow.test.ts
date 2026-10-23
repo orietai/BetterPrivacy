@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createKeyring } from '../src/core/keyring'
 import { createSession } from '../src/core/session'
 import { createSettingsStore } from '../src/settings'
-import { parseWire } from '../src/crypto/wire'
+import { parseWire, chunkPlaintext, CHUNK_UTF8_BYTES } from '../src/crypto/wire'
 import { deriveKeyMaterial } from '../src/crypto/kdf'
 import { decryptText } from '../src/crypto/cipher'
 
@@ -125,16 +125,149 @@ describe('web create → share → open', () => {
     p.w.close()
   })
 
-  it('rejects empty input and Unicode beyond the one-link byte budget', () => {
+  it('rejects empty input without treating long Unicode as invalid', () => {
     const p = page()
     p.submit('create-form')
     expect(p.$('create-status').textContent).toBe('Write a message first.')
     p.input('message', '🦇'.repeat(341))
+    expect(p.$('message-budget').textContent).toContain('2 links')
+    expect(p.$('message-budget').classList.contains('over')).toBe(false)
+    expect(p.$('message').getAttribute('aria-invalid')).not.toBe('true')
+    expect(p.$('generated').hidden).toBe(true)
+    p.w.close()
+  })
+
+  it.each([
+    'a'.repeat(1360),
+    '🦇'.repeat(340),
+    '🦇'.repeat(341),
+    'a'.repeat(5000),
+    '  Türkçe 🦇 Привет\n\t'.repeat(220) + '\n final space ',
+  ])('splits losslessly at plugin-compatible UTF-8 boundaries (%#)', async (plaintext) => {
+    const p = await makeLink(plaintext)
+    const links = p.$('share-link').value.split('\n')
+    const expected = chunkPlaintext(plaintext)
+    expect(links).toHaveLength(expected.length)
+    const first = parseWire(links[0])!
+    const material = await deriveKeyMaterial(PHRASE, first.salt)
+    const decoded = []
+    const ivs = new Set()
+    for (const link of links) {
+      const wire = parseWire(link)!
+      expect(wire.salt).toBe(first.salt)
+      expect(wire.keyId).toBe(material.keyId)
+      expect(('🦇<' + link + '>').length).toBeLessThanOrEqual(2000)
+      ivs.add(wire.iv)
+      const text = await decryptText(material.key, wire.iv, wire.ciphertext)
+      expect(new TextEncoder().encode(text).length).toBeLessThanOrEqual(CHUNK_UTF8_BYTES)
+      decoded.push(text)
+    }
+    expect(ivs.size).toBe(links.length)
+    expect(decoded).toEqual(expected)
+    expect(decoded.join('')).toBe(plaintext)
+    expect(p.$('generated-parts').children.length).toBe(links.length > 1 ? links.length : 0)
+    expect(p.$('open-created').hidden).toBe(links.length > 1)
+    p.w.close()
+  })
+
+  it('copies all parts in order, copies individual parts, and shares multiple links as text without the phrase', async () => {
+    const copied: string[] = []
+    const p = page('create/index.html', '', (w) => {
+      w.navigator.clipboard = { writeText: async (value: string) => { copied.push(value) } }
+      w.navigator.share = async (value: unknown) => { w.shared = value }
+    })
+    p.input('message', '🦇'.repeat(750))
     p.input('create-phrase', PHRASE)
     p.submit('create-form')
-    expect(p.$('create-status').textContent).toContain('too long')
-    expect(p.$('message-budget').classList.contains('over')).toBe(true)
+    await until(() => !p.$('create-submit').disabled)
+    const links = p.$('share-link').value.split('\n')
+    expect(links).toHaveLength(3)
+    expect(p.$('copy-link').textContent).toBe('Copy all links')
+    p.$('copy-link').click()
+    await until(() => p.$('share-status').textContent.includes('All links copied'))
+    p.$('generated-parts').children[1].querySelector('button').click()
+    await until(() => copied.length === 2)
+    expect(copied).toEqual([links.join('\n'), links[1]])
+    const rows = Array.from(p.$('generated-parts').children) as any[]
+    rows.forEach((row, index) => {
+      expect(row.querySelector('p').textContent).toBe('Part ' + (index + 1) + ' / 3')
+      expect(row.querySelector('a').getAttribute('href')).toBe('/m/' + new URL(links[index]).hash)
+    })
+    p.$('share-native').click()
+    await until(() => !!p.w.shared)
+    expect(p.w.shared).toEqual({ title: 'BetterPrivacy', text: links.join('\n') })
+    expect(JSON.stringify(p.w.shared)).not.toContain(PHRASE)
+    // Each part also opens through the actual browser reader, not a new format.
+    const reader = page('m/index.html', new URL(links[1]).hash)
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => !reader.$('go').disabled)
+    expect(reader.$('result').textContent).toBe(chunkPlaintext('🦇'.repeat(750))[1])
+    for (const lang of ['tr', 'ru', 'en']) {
+      p.w.BPUI.apply(lang)
+      p.w.document.querySelectorAll('[data-copy]').forEach((node: any) => {
+        expect(node.textContent).not.toBe(node.getAttribute('data-copy'))
+      })
+      expect(p.$('share-link').value).toBe(links.join('\n'))
+    }
+    p.input('message', 'short')
+    expect(p.$('generated-parts').children).toHaveLength(0)
+    p.submit('create-form')
+    await until(() => !p.$('create-submit').disabled)
+    expect(p.$('generated-parts').hidden).toBe(true)
+    expect(p.$('copy-link').textContent).toBe('Copy link')
+    expect(p.$('open-created').hidden).toBe(false)
+    p.w.close(); reader.w.close()
+  })
+
+  it('selects exactly the requested part when clipboard access fails', async () => {
+    const p = await makeLink('a'.repeat(3000))
+    const links = p.$('share-link').value.split('\n')
+    p.$('generated-parts').children[1].querySelector('button').click()
+    await until(() => p.$('share-status').textContent.includes('manually'))
+    const field = p.$('share-link')
+    expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(links[1])
+    p.$('copy-link').click()
+    await until(() => p.$('share-status').textContent.includes('selected links'))
+    expect(field.value.slice(field.selectionStart, field.selectionEnd)).toBe(links.join('\n'))
+    p.w.close()
+  })
+
+  it.each(['failure', 'edit', 'leave'])('never publishes partial links after a second-part %s', async (action) => {
+    let calls = 0
+    let finish!: () => void
+    const p = page('create/index.html', '', (w) => {
+      Object.defineProperty(w, 'crypto', { value: {
+        getRandomValues: crypto.getRandomValues.bind(crypto),
+        subtle: new Proxy(crypto.subtle, { get(target, property) {
+          if (property === 'encrypt') return async (...args: Parameters<SubtleCrypto['encrypt']>) => {
+            calls++
+            if (calls === 2) {
+              await new Promise<void>((resolve) => { finish = resolve })
+              if (action === 'failure') throw new Error('simulated second-part encryption failure')
+            }
+            return target.encrypt(...args)
+          }
+          const value = Reflect.get(target, property)
+          return typeof value === 'function' ? value.bind(target) : value
+        } }),
+      } })
+    })
+    p.input('message', 'a'.repeat(5000))
+    p.input('create-phrase', PHRASE)
+    p.submit('create-form')
+    await until(() => calls === 2)
+    expect(p.$('share-link').value).toBe('')
     expect(p.$('generated').hidden).toBe(true)
+    if (action === 'edit') p.input('create-phrase', 'edited phrase')
+    if (action === 'leave') p.w.dispatchEvent(new p.w.Event('pagehide'))
+    finish()
+    await until(() => !p.$('create-submit').disabled)
+    expect(p.$('share-link').value).toBe('')
+    expect(p.$('generated-parts').children).toHaveLength(0)
+    expect(p.$('generated').hidden).toBe(true)
+    expect(calls).toBe(2)
+    expect(p.errors).toEqual([])
     p.w.close()
   })
 
@@ -245,6 +378,156 @@ describe('web create → share → open', () => {
     reader.w.dispatchEvent(new reader.w.Event('pagehide'))
     expect(reader.$('result').textContent).toBe('')
     expect(reader.$('phrase').value).toBe('')
+    creator.w.close(); reader.w.close()
+  })
+
+  it('opens the actual web composer’s complete multipart output with one derivation and copies the joined text', async () => {
+    const text = '  Birlikte 🦇 Привет\n\t'.repeat(180) + ' final\n'
+    const creator = await makeLink(text)
+    const links = creator.$('share-link').value
+    const count = links.split('\n').length
+    let derives = 0
+    const reader = page('m/index.html', '', (w) => {
+      w.navigator.clipboard = { writeText: async (value: string) => { w.copied = value } }
+      Object.defineProperty(w, 'crypto', { value: {
+        subtle: new Proxy(crypto.subtle, { get(target, property) {
+          const value = Reflect.get(target, property)
+          if (property === 'deriveBits') return (...args: Parameters<SubtleCrypto['deriveBits']>) => {
+            derives++
+            return target.deriveBits(...args)
+          }
+          return typeof value === 'function' ? value.bind(target) : value
+        } }),
+      } })
+    })
+    reader.input('paste-link', links)
+    reader.submit('paste-form')
+    expect(reader.$('batch-summary').textContent).toContain(count + ' links loaded')
+    expect(reader.w.location.hash).toBe('') // No misleading single-part batch URL.
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => !reader.$('go').disabled)
+    expect(reader.$('result').textContent).toBe(text)
+    expect(reader.$('result').hidden).toBe(false)
+    expect(derives).toBe(1)
+    expect(reader.$('phrase').value).toBe('')
+    reader.$('copy').click()
+    await until(() => !!reader.w.copied)
+    expect(reader.w.copied).toBe(text)
+    for (const lang of ['tr', 'ru', 'en']) {
+      reader.w.document.querySelector('[data-lang="' + lang + '"]').click()
+      expect(reader.$('batch-summary').textContent).toContain(String(count))
+      expect(reader.$('batch-summary').textContent).not.toContain('{count}')
+      expect(reader.$('status').textContent).not.toContain('{count}')
+      expect(reader.$('result').textContent).toBe(text)
+    }
+    reader.$('forget-message').click()
+    expect(reader.$('result').textContent).toBe('')
+    expect(reader.$('tools').hidden).toBe(true)
+    creator.w.close(); reader.w.close()
+  })
+
+  it('joins independently salted links and plugin wrappers in pasted order, including from a direct-link entry', async () => {
+    const a = await makeLink('first\n')
+    const b = await makeLink(' second 🦇')
+    const first = a.$('share-link').value
+    const second = b.$('share-link').value
+    const reader = page('m/index.html', new URL(first).hash)
+    expect(reader.$('paste-link').value).toBe(first)
+    expect(reader.$('paste-form').closest('[hidden]')).toBeNull()
+    reader.input('paste-link', '🦇<' + second + '>\n\n<' + first + '>')
+    reader.submit('paste-form')
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => !reader.$('go').disabled)
+    expect(reader.$('result').textContent).toBe(' second 🦇first\n')
+    expect(reader.$('paste-help').textContent).toContain('missing parts cannot be detected')
+    a.w.close(); b.w.close(); reader.w.close()
+  })
+
+  it.each(['malformed', 'external', 'duplicate'])('rejects an entire batch containing a %s link and clears previous plaintext', async (kind) => {
+    const creator = await makeLink('a'.repeat(3000))
+    const links = creator.$('share-link').value.split('\n')
+    const reader = page('m/index.html', new URL(links[0]).hash)
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => !reader.$('go').disabled)
+    expect(reader.$('result').hidden).toBe(false)
+    const invalid = kind === 'malformed' ? links[1].replace('#v1.', '#v2.') :
+      kind === 'external' ? links[1].replace('betterprivacy.app', 'example.com') : links[0]
+    reader.input('paste-link', links[0] + '\n' + invalid)
+    reader.submit('paste-form')
+    expect(reader.$('box').hidden).toBe(true)
+    expect(reader.$('result').textContent).toBe('')
+    expect(reader.$('paste-status').textContent).toContain(kind === 'duplicate' ? 'repeated' : 'not a complete')
+    reader.w.document.querySelector('[data-lang="tr"]').click()
+    expect(reader.$('paste-status').textContent.length).toBeGreaterThan(10)
+    creator.w.close(); reader.w.close()
+  })
+
+  it.each(['wrong phrase', 'tamper'])('does not expose any partial text when part 2 has %s', async (kind) => {
+    const creator = await makeLink('a'.repeat(3000))
+    const links = creator.$('share-link').value.split('\n')
+    if (kind === 'wrong phrase') {
+      creator.input('message', 'different secret')
+      creator.input('create-phrase', 'a different passphrase')
+      creator.submit('create-form')
+      await until(() => !creator.$('create-submit').disabled)
+      links[1] = creator.$('share-link').value
+    } else {
+      const fields = links[1].split('.')
+      const last = fields.length - 1
+      fields[last] = (fields[last][0] === 'A' ? 'B' : 'A') + fields[last].slice(1)
+      links[1] = fields.join('.')
+    }
+    const reader = page('m/index.html')
+    reader.input('paste-link', links.join('\n'))
+    reader.submit('paste-form')
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => !reader.$('go').disabled)
+    expect(reader.$('result').hidden).toBe(true)
+    expect(reader.$('result').textContent).toBe('')
+    expect(reader.$('tools').hidden).toBe(true)
+    expect(reader.$('status').textContent).toContain('Part 2 of 3')
+    expect(reader.$('status').classList.contains('err')).toBe(true)
+    creator.w.close(); reader.w.close()
+  })
+
+  it.each(['links', 'phrase', 'pagehide', 'hash'])('invalidates multipart decryption when %s changes during part 2', async (action) => {
+    const creator = await makeLink('a'.repeat(3000))
+    let calls = 0
+    let finish!: () => void
+    const reader = page('m/index.html', '', (w) => {
+      Object.defineProperty(w, 'crypto', { value: {
+        subtle: new Proxy(crypto.subtle, { get(target, property) {
+          if (property === 'decrypt') return async (...args: Parameters<SubtleCrypto['decrypt']>) => {
+            if (++calls === 2) await new Promise<void>((resolve) => { finish = resolve })
+            return target.decrypt(...args)
+          }
+          const value = Reflect.get(target, property)
+          return typeof value === 'function' ? value.bind(target) : value
+        } }),
+      } })
+    })
+    reader.input('paste-link', creator.$('share-link').value)
+    reader.submit('paste-form')
+    reader.input('phrase', PHRASE)
+    reader.submit('form')
+    await until(() => calls === 2)
+    expect(reader.$('result').hidden).toBe(true)
+    if (action === 'links') reader.input('paste-link', '')
+    if (action === 'phrase') reader.input('phrase', 'edited phrase')
+    if (action === 'pagehide') reader.w.dispatchEvent(new reader.w.Event('pagehide'))
+    if (action === 'hash') reader.w.location.hash = '#broken'
+    finish()
+    await until(() => !reader.$('go').disabled)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(reader.$('result').textContent).toBe('')
+    expect(reader.$('result').hidden).toBe(true)
+    expect(reader.$('tools').hidden).toBe(true)
+    expect(calls).toBe(2)
+    expect(reader.errors).toEqual([])
     creator.w.close(); reader.w.close()
   })
 })

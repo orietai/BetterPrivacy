@@ -593,7 +593,9 @@
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   @media (prefers-reduced-transparency: reduce) { .nav { background: #0b0d10; backdrop-filter: none; } }
   @media (prefers-contrast: more) { .nav { background: #050505; border-color: #8d949f; } }
+  @media (max-width: 560px) { html:not([lang="en"]) .hero-copy .redact { white-space: normal; } }
 </style>
+<link rel="stylesheet" href="/assets/controls.css">
 <meta name="author" content="oriet.ai">
 <link rel="author" href="https://oriet.ai/">
 <link rel="stylesheet" href="/assets/oriet.css">
@@ -608,6 +610,11 @@
   <a class="link" href="#security">Security</a>
   <a class="link" href="#faq">FAQ</a>
   <a class="nav-dl" href="#install">Download <span class="ico">↓</span></a>
+  <div class="langs" id="langs" role="group" aria-label="Language">
+    <button type="button" data-lang="en" lang="en" aria-label="English" aria-pressed="true">EN</button>
+    <button type="button" data-lang="tr" lang="tr" aria-label="Türkçe" aria-pressed="false">TR</button>
+    <button type="button" data-lang="ru" lang="ru" aria-label="Русский" aria-pressed="false">RU</button>
+  </div>
 </nav>
 
 <!-- ================= hero ================= -->
@@ -952,6 +959,8 @@
 </div>
 </footer>
 
+<script src="/assets/home-i18n.js"></script>
+<script src="/assets/site.js"></script>
 <script>
   var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -1004,6 +1013,7 @@
 
     function frame() {
       if (!visible) { running = false; return }
+      SECRET = BPHome.text('what discord never receives it cannot read · it cannot reveal what it cannot see · privacy is a feature not a crime · encrypt everything · betterprivacy.app · ')
       t += 0.0038
       if (auto) {
         tx = W * (0.5 + 0.38 * Math.sin(t * 1.3))
@@ -1080,13 +1090,15 @@
   // ---- mono status line decodes on load ------------------------------------
   ;(function () {
     var el = document.getElementById('decode')
-    var final = el.textContent
+    var final = BPHome.text('interactive illustration · v1.0.0 · encryption on your device')
+    BPHome.set(el, 'interactive illustration · v1.0.0 · encryption on your device')
     if (reduceMotion) return
     var pool = 'abcdef0123456789|_-'
     var t0 = null
     var DURATION = 1100
     el.textContent = ''
     function frame(ts) {
+      final = BPHome.text('interactive illustration · v1.0.0 · encryption on your device')
       if (t0 === null) t0 = ts
       var done = Math.floor(((ts - t0) / DURATION) * final.length)
       var out = final.slice(0, done)
@@ -1126,8 +1138,8 @@
       msg1.classList.add('dec')
       msg2.hidden = false
       msg2.classList.add('in', 'dec')
-      tag.textContent = 'decrypted locally'
-      hint.textContent = 'Messages encrypt before sending; only phrase holders ever see plaintext.'
+      BPHome.set(tag, 'decrypted locally')
+      BPHome.set(hint, 'Messages encrypt before sending; only phrase holders ever see plaintext.')
     }
 
     if (reduceMotion) { endState(); return }
@@ -1169,8 +1181,8 @@
       card.hidden = true
       card.classList.remove('leaving')
       cur.style.opacity = '0'
-      tag.textContent = 'encryption off'
-      hint.textContent = 'A friend already encrypted #stargazing — you just need the phrase.'
+      BPHome.set(tag, 'encryption off')
+      BPHome.set(hint, 'A friend already encrypted #stargazing — you just need the phrase.')
     }
 
     async function loop() {
@@ -1200,9 +1212,9 @@
         // channel arms; the friend's old message decrypts
         chat.classList.add('armed')
         demo.classList.add('lit')
-        tag.textContent = 'key derived — channel armed'
+        BPHome.set(tag, 'key derived — channel armed')
         msg1.classList.add('dec')
-        hint.textContent = 'Same phrase, same channel → same key. The old message just decrypted.'
+        BPHome.set(hint, 'Same phrase, same channel → same key. The old message just decrypted.')
         await delay(1600); if (!visible) break
 
         // type a reply
@@ -1215,14 +1227,14 @@
         itype.textContent = ''
         msg2.hidden = false
         requestAnimationFrame(function () { msg2.classList.add('in') })
-        tag.textContent = 'encrypted before sending'
-        hint.textContent = 'Sent. Discord receives and stores only this ciphertext.'
+        BPHome.set(tag, 'encrypted before sending')
+        BPHome.set(hint, 'Sent. Discord receives and stores only this ciphertext.')
         await delay(1700); if (!visible) break
 
         // ...which decrypts locally for phrase holders
         msg2.classList.add('dec')
-        tag.textContent = 'decrypted locally'
-        hint.textContent = 'Phrase holders see plaintext — rendered only on their screens.'
+        BPHome.set(tag, 'decrypted locally')
+        BPHome.set(hint, 'Phrase holders see plaintext — rendered only on their screens.')
         cur.style.opacity = '0'
         await delay(3600)
       }
@@ -1242,6 +1254,11 @@
     var batBtn = document.getElementById('sbat')
     var TEXT = textEl.textContent
     var locked = false, hovering = false, token = 0
+    window.addEventListener('bp-language-change', function () {
+      token++
+      TEXT = BPHome.text("what it can't see.")
+      textEl.textContent = TEXT
+    })
 
     function scramble(dur) {
       var id = ++token

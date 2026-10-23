@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/reader.css">
 <link rel="stylesheet" href="/assets/tools-skin.css">
+<link rel="stylesheet" href="/assets/controls.css">
 <meta name="author" content="oriet.ai">
 <link rel="author" href="https://oriet.ai/">
 <link rel="stylesheet" href="/assets/oriet.css">
@@ -46,24 +47,25 @@
 <div class="reader-workspace">
   <div class="card-wrap" id="wrap">
     <div class="shell">
-      <!-- no / malformed payload -->
-      <div class="card" id="empty" hidden>
+      <div class="card">
+      <!-- Keep link entry available for both direct links and pasted batches. -->
+      <div id="empty" hidden>
         <h2 data-i18n="empty.title">🦇 Nothing to decrypt</h2>
         <p style="margin-top:12px; color:var(--muted); font-size:14.5px;" data-i18n="empty.body">
-          Paste a BetterPrivacy message link below, or choose an encrypted file further down.
+          Paste one or more BetterPrivacy message links below, or choose an encrypted file further down.
         </p>
         <p style="margin-top:10px; color:var(--muted); font-size:14.5px;" id="malformed-note" data-i18n="empty.malformed" hidden>
           The link you followed carries a payload this page doesn’t recognize — it may have
           been truncated while copying. Ask the sender to copy the whole message.
         </p>
+      </div>
         <form id="paste-form" novalidate>
-<label for="paste-link" data-copy="pasteLabel">BetterPrivacy link</label>
-<textarea id="paste-link" rows="3" spellcheck="false" autocomplete="off" aria-describedby="paste-help paste-status"></textarea>
-<p class="input-help" id="paste-help" data-copy="pasteHelp">Paste the complete link you received here.</p>
-<button type="submit" data-copy="pasteCta">Open link</button>
-<p id="paste-status" role="status" aria-live="polite"></p>
-</form>
-<div class="cta"><a href="/create/" data-copy="newMessage">Create a private message of your own.</a></div>
+          <label for="paste-link" data-copy="pasteLabel">BetterPrivacy links</label>
+          <textarea id="paste-link" rows="4" spellcheck="false" autocomplete="off" aria-describedby="paste-help paste-status"></textarea>
+          <p class="input-help" id="paste-help" data-copy="pasteHelp">Paste one or more complete links in message order. Parts are joined in the order pasted; missing parts cannot be detected.</p>
+          <button class="button block form-action" type="submit" data-copy="pasteCta">Load links</button>
+          <p id="paste-status" role="status" aria-live="polite"></p>
+        </form>
         <p class="privacy-note" data-i18n="empty.note">
           No accounts, no servers, no analytics. The encrypted payload travels in the URL
           fragment (the part after #), which your browser never sends to any server — including ours.
@@ -73,25 +75,26 @@
       <!-- decrypt flow -->
       <div class="card" id="box" hidden>
         <h2 data-i18n="msg.title">🦇 Encrypted message</h2>
+        <p class="input-help" id="batch-summary" role="status" aria-live="polite" hidden></p>
         <details class="message-details"><summary data-copy="messageDetails">Message details</summary><p class="keyid"><span data-i18n="msg.fp">key fingerprint</span> <b id="fp"></b> · AES-256-GCM</p></details>
         <div class="cipher-preview" id="preview"></div>
 
         <form id="form">
           <label for="phrase" data-i18n="msg.phraseLabel">Secret phrase</label>
-          <div class="row">
+          <div class="phrase-field">
             <input type="password" id="phrase" autocomplete="off" autocapitalize="off" spellcheck="false"
                    data-i18n-ph="msg.phrasePh" placeholder="the phrase the sender shared with you">
-            <button type="button" id="show-reader-phrase" aria-pressed="false" aria-controls="phrase" data-copy="showPhrase">Show</button>
-            <button type="submit" id="go" data-i18n="msg.decrypt">Decrypt</button>
+            <button class="button secondary compact" type="button" id="show-reader-phrase" aria-pressed="false" aria-controls="phrase" data-copy="showPhrase">Show</button>
           </div>
+          <button class="button block form-action" type="submit" id="go" data-i18n="msg.decrypt">Decrypt</button>
         </form>
         <p class="status" id="status" role="status" aria-live="polite">Enter the phrase the sender gave you — outside Discord, ideally.</p>
 
         <div class="result" id="result" tabindex="-1" hidden></div>
-        <div class="result-tools" id="tools" hidden>
-          <button class="copy" type="button" id="copy" data-i18n="msg.copy">Copy plaintext</button>
-          <button type="button" id="forget-message" data-copy="hideMessage">Hide message</button>
-          <a href="/create/" data-copy="newMessage">Create a private message of your own.</a>
+        <div class="result-tools actions" id="tools" hidden>
+          <button class="button" type="button" id="copy" data-i18n="msg.copy">Copy plaintext</button>
+          <button class="button secondary" type="button" id="forget-message" data-copy="hideMessage">Hide message</button>
+          <a class="button secondary" href="/create/" data-copy="createNav">Create a message</a>
         </div>
 
         <p class="privacy-note" data-i18n="msg.note">
@@ -120,11 +123,11 @@
         <div id="file-unlock" hidden>
           <form id="file-form">
             <label for="fphrase" data-i18n="file.phraseLabel">Secret phrase</label>
-            <div class="row">
+            <div class="phrase-field">
               <input type="password" id="fphrase" autocomplete="off" autocapitalize="off" spellcheck="false"
                      data-i18n-ph="file.phrasePh" placeholder="the phrase this channel uses">
-              <button type="submit" id="fgo" data-i18n="file.decrypt">Decrypt</button>
             </div>
+            <button class="button block form-action" type="submit" id="fgo" data-i18n="file.decrypt">Decrypt</button>
           </form>
         </div>
         <p class="status" id="file-status" role="status" aria-live="polite" hidden></p>
@@ -132,7 +135,7 @@
         <div class="file-result" id="file-result" hidden>
           <p class="file-meta" id="file-meta"></p>
           <div class="file-media" id="file-media" hidden></div>
-          <a class="dl" id="file-dl" href="#" download></a>
+          <a class="button" id="file-dl" href="#" download></a>
         </div>
       </div>
     </div>
@@ -154,7 +157,7 @@
   var I18N = {
     en: {
       'empty.title': 'Open a private message',
-      'empty.body': 'Paste a BetterPrivacy message link below, or choose an encrypted file further down.',
+      'empty.body': 'Paste one or more BetterPrivacy message links below, or choose an encrypted file further down.',
       'empty.malformed': 'The link you followed carries a payload this page doesn’t recognize — it may have been truncated while copying. Ask the sender to copy the whole message.',
       'empty.cta': 'Get the plugin — encrypt your own channels',
       'empty.note': 'No accounts, no servers, no analytics. The encrypted payload travels in the URL fragment (the part after #), which your browser never sends to any server — including ours.',
@@ -192,7 +195,7 @@
     },
     tr: {
       'empty.title': 'Özel bir mesaj aç',
-      'empty.body': 'Aldığın BetterPrivacy mesaj bağlantısını yapıştır veya aşağıdan şifreli bir dosya seç.',
+      'empty.body': 'Aldığın BetterPrivacy mesaj bağlantılarını yapıştır veya aşağıdan şifreli bir dosya seç.',
       'empty.malformed': 'Takip ettiğin bağlantı, bu sayfanın tanımadığı bir veri taşıyor — kopyalanırken kırpılmış olabilir. Gönderenden mesajın tamamını kopyalamasını iste.',
       'empty.cta': 'Eklentiyi edin — kendi kanallarını şifrele',
       'empty.note': 'Hesap yok, sunucu yok, analitik yok. Şifreli veri URL’nin # sonrası bölümünde taşınır; tarayıcın bu bölümü hiçbir sunucuya göndermez — bizimkiler dahil.',
@@ -230,7 +233,7 @@
     },
     ru: {
       'empty.title': 'Открыть приватное сообщение',
-      'empty.body': 'Вставьте ссылку BetterPrivacy или выберите зашифрованный файл ниже.',
+      'empty.body': 'Вставьте ссылки BetterPrivacy или выберите зашифрованный файл ниже.',
       'empty.malformed': 'Ссылка несёт данные, которые страница не распознаёт — возможно, они обрезались при копировании. Попросите отправителя скопировать сообщение целиком.',
       'empty.cta': 'Установить плагин — шифруйте свои каналы',
       'empty.note': 'Без аккаунтов, серверов и аналитики. Зашифрованные данные едут во фрагменте URL (после #), который браузер никогда не отправляет ни на один сервер — включая наш.',
@@ -267,6 +270,36 @@
       'footer.terms': 'Условия'
     }
   }
+
+  // Batch UI stays separate from the v1 protocol: each link is independently
+  // authenticated. The format has no sequence or total-count metadata.
+  Object.assign(I18N.en, {
+    'msg.batch': '{count} links loaded. They will be joined in the order pasted.',
+    'msg.progress': 'Decrypting part {part} of {count}…',
+    'msg.batchDone': 'All {count} provided links decrypted and joined locally.',
+    'msg.batchMismatch': 'Part {part} of {count} uses a different phrase. No combined message was shown.',
+    'msg.batchAuth': 'Part {part} of {count} failed authentication. No combined message was shown.',
+    'msg.batchError': 'Could not decrypt part {part} of {count}. No combined message was shown. Try again.',
+    'msg.duplicate': 'A link is repeated. Remove the duplicate before loading the parts.'
+  })
+  Object.assign(I18N.tr, {
+    'msg.batch': '{count} bağlantı yüklendi. Yapıştırdığın sırayla birleştirilecek.',
+    'msg.progress': '{count} parçadan {part}. parça çözülüyor…',
+    'msg.batchDone': 'Verdiğin {count} bağlantının tamamı cihazında çözüldü ve birleştirildi.',
+    'msg.batchMismatch': '{count} parçadan {part}. parça farklı bir ifade kullanıyor. Birleştirilmiş mesaj gösterilmedi.',
+    'msg.batchAuth': '{count} parçadan {part}. parça doğrulanamadı. Birleştirilmiş mesaj gösterilmedi.',
+    'msg.batchError': '{count} parçadan {part}. parça çözülemedi. Birleştirilmiş mesaj gösterilmedi. Tekrar dene.',
+    'msg.duplicate': 'Bir bağlantı tekrarlanmış. Parçaları yüklemeden önce tekrarını kaldır.'
+  })
+  Object.assign(I18N.ru, {
+    'msg.batch': 'Загружено ссылок: {count}. Части будут объединены в порядке вставки.',
+    'msg.progress': 'Расшифровка части {part} из {count}…',
+    'msg.batchDone': 'Все предоставленные ссылки ({count}) расшифрованы и объединены на устройстве.',
+    'msg.batchMismatch': 'Часть {part} из {count} использует другую фразу. Объединённый текст не показан.',
+    'msg.batchAuth': 'Часть {part} из {count} не прошла проверку подлинности. Объединённый текст не показан.',
+    'msg.batchError': 'Не удалось расшифровать часть {part} из {count}. Объединённый текст не показан. Попробуйте ещё раз.',
+    'msg.duplicate': 'Одна ссылка повторяется. Удалите дубликат перед загрузкой частей.'
+  })
 
   var lang = 'en'
   function t(key) {
@@ -307,14 +340,21 @@
 
   async function derive(phrase, saltB64) {
     var salt = b64d(saltB64)
-    var pk = await crypto.subtle.importKey('raw', new TextEncoder().encode(phrase), 'PBKDF2', false, ['deriveBits'])
-    var raw = new Uint8Array(await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: ITERATIONS }, pk, 256))
-    var digest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw))
-    var keyId = b64e(digest.subarray(0, 6))
-    var key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt'])
-    raw.fill(0)
-    return { key: key, keyId: keyId }
+    var passBytes = new TextEncoder().encode(phrase)
+    var raw = null
+    try {
+      var pk = await crypto.subtle.importKey('raw', passBytes, 'PBKDF2', false, ['deriveBits'])
+      passBytes.fill(0)
+      raw = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: 'PBKDF2', hash: 'SHA-256', salt: salt, iterations: ITERATIONS }, pk, 256))
+      var digest = new Uint8Array(await crypto.subtle.digest('SHA-256', raw))
+      var keyId = b64e(digest.subarray(0, 6))
+      var key = await crypto.subtle.importKey('raw', raw, { name: 'AES-GCM' }, false, ['decrypt'])
+      return { key: key, keyId: keyId }
+    } finally {
+      passBytes.fill(0)
+      if (raw) raw.fill(0)
+    }
   }
 
   var wrap = document.getElementById('wrap')
@@ -347,34 +387,61 @@
 
   // A status line remembers its KEY, so a language switch can re-render it.
   function statusLine(el) { return { el: el, key: '', err: false } }
-  function setStatus(s, key, isErr) {
+  function setStatus(s, key, isErr, params) {
     s.key = key || ''
     s.err = !!isErr
-    s.el.textContent = s.key ? t(s.key) : ''
+    s.params = params || null
+    var text = s.key ? t(s.key) : ''
+    if (s.params) Object.keys(s.params).forEach(function (name) { text = text.split('{' + name + '}').join(s.params[name]) })
+    s.el.textContent = text
     s.el.hidden = !s.key
     s.el.classList.toggle('err', s.err)
   }
   var msgStatus = statusLine(document.getElementById('status'))
   var fileStatus = statusLine(document.getElementById('file-status'))
+  var batchStatus = statusLine(document.getElementById('batch-summary'))
+  var pasteStatus = statusLine(document.getElementById('paste-status'))
+  var pasteInput = document.getElementById('paste-link')
+
+  function payload(hash) {
+    var m = FRAG_RE.exec(hash)
+    return m ? { keyId: m[1], salt: m[2], iv: m[3], ct: m[4] } : null
+  }
+  function loadParts(loaded) {
+    clearMessage()
+    parts = loaded
+    phraseInput.value = ''
+    empty.hidden = true
+    box.hidden = false
+    document.getElementById('fp').textContent = Array.from(new Set(loaded.map(function (p) { return p.keyId }))).join(', ')
+    document.getElementById('preview').textContent = loaded.map(function (p) {
+      return 'v1.' + p.keyId + '.' + p.salt + '.' + p.iv + '.' + p.ct
+    }).join('\n')
+    setStatus(batchStatus, loaded.length > 1 ? 'msg.batch' : '', false, { count: loaded.length })
+    setStatus(msgStatus, 'msg.status.idle')
+    phraseInput.focus()
+  }
 
   function boot() {
     clearMessage()
     parts = null
     phraseInput.value = ''
     setStatus(msgStatus, 'msg.status.idle')
-    var m = FRAG_RE.exec(location.hash)
-    if (!m) {
+    setStatus(batchStatus, '')
+    pasteStatus.el.removeAttribute('data-copy')
+    setStatus(pasteStatus, '')
+    pasteInput.value = ''
+    document.getElementById('fp').textContent = ''
+    document.getElementById('preview').textContent = ''
+    var parsed = payload(location.hash)
+    if (!parsed) {
       empty.hidden = false
       box.hidden = true
       document.getElementById('malformed-note').hidden = location.hash.length <= 1 || location.hash === '#files'
       return
     }
-    parts = { keyId: m[1], salt: m[2], iv: m[3], ct: m[4] }
-    empty.hidden = true
-    box.hidden = false
-    document.getElementById('fp').textContent = parts.keyId
-    document.getElementById('preview').textContent = 'v1.' + parts.keyId + '.' + parts.salt + '.' + parts.iv + '.' + parts.ct
-    phraseInput.focus()
+    pasteInput.value = 'https://betterprivacy.app/m' + location.hash
+    loadParts([parsed])
   }
 
   document.getElementById('form').addEventListener('submit', async function (e) {
@@ -390,33 +457,49 @@
     if (!HAS_SUBTLE) { setStatus(msgStatus, 'msg.status.insecure', true); return }
     goBtn.disabled = true
     setStatus(msgStatus, 'msg.status.deriving')
+    var decoded = []
+    var derived = new Map()
+    var index = 0
     try {
-      var d = await derive(phrase, activeParts.salt)
-      if (!current()) return
-      if (d.keyId !== activeParts.keyId) {
-        setStatus(msgStatus, 'msg.status.mismatch', true)
-        return
-      }
-      var pt
-      try {
-        var buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(activeParts.iv) }, d.key, b64d(activeParts.ct))
-        pt = new TextDecoder().decode(buf)
-      } catch (_) {
-        if (current()) setStatus(msgStatus, 'msg.status.auth', true)
-        return
+      for (index = 0; index < activeParts.length; index++) {
+        if (!current()) return
+        var part = activeParts[index]
+        var progress = { part: index + 1, count: activeParts.length }
+        if (activeParts.length > 1) setStatus(msgStatus, 'msg.progress', false, progress)
+        // Web/Discord split messages normally share a salt. Derive once per
+        // distinct salt, but still authenticate every link independently.
+        var d = derived.get(part.salt)
+        if (!d) { d = await derive(phrase, part.salt); derived.set(part.salt, d) }
+        if (!current()) return
+        if (d.keyId !== part.keyId) {
+          setStatus(msgStatus, activeParts.length > 1 ? 'msg.batchMismatch' : 'msg.status.mismatch', true, progress)
+          return
+        }
+        var buf
+        try {
+          buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(part.iv) }, d.key, b64d(part.ct))
+          if (!current()) return
+          decoded.push(new TextDecoder().decode(buf))
+        } catch (_) {
+          if (current()) setStatus(msgStatus, activeParts.length > 1 ? 'msg.batchAuth' : 'msg.status.auth', true, progress)
+          return
+        } finally { if (buf) new Uint8Array(buf).fill(0) }
       }
       if (!current()) return
       phraseInput.value = ''
-      result.textContent = pt // textContent: plaintext is data, never markup
+      result.textContent = decoded.join('') // No added separators; preserve the original text exactly.
       result.hidden = false
       result.focus()
       requestAnimationFrame(function () { if (current()) result.classList.add('show') })
       tools.hidden = false
       wrap.classList.add('lit')
-      setStatus(msgStatus, 'msg.status.done')
+      setStatus(msgStatus, activeParts.length > 1 ? 'msg.batchDone' : 'msg.status.done', false, { count: activeParts.length })
     } catch (err) {
-      if (current()) setStatus(msgStatus, 'msg.status.error', true)
+      if (current()) setStatus(msgStatus, activeParts.length > 1 ? 'msg.batchError' : 'msg.status.error', true,
+        { part: index + 1, count: activeParts.length })
     } finally {
+      derived.clear()
+      decoded.length = 0
       if (current()) goBtn.disabled = false
     }
   })
@@ -467,18 +550,56 @@
 
   document.getElementById('paste-form').addEventListener('submit', function (e) {
     e.preventDefault()
-    var input = document.getElementById('paste-link').value.trim()
-    var match = /^(?:🦇)?<?(https:\/\/betterprivacy\.app\/m\/?#v1\.[A-Za-z0-9_.-]+)>?$/.exec(input)
-    var valid = match && (input.includes('<') === input.includes('>')) && FRAG_RE.test(new URL(match[1]).hash)
-    if (!valid) {
-      var error = document.getElementById('paste-status')
-      error.setAttribute('data-copy', 'pasteInvalid')
-      error.textContent = window.BPUI ? BPUI.text('pasteInvalid') : 'Paste a complete BetterPrivacy link, including the part after #.'
-      return
+    clearMessage()
+    parts = null
+    box.hidden = true
+    phraseInput.value = ''
+    setStatus(batchStatus, '')
+    var tokens = pasteInput.value.trim().split(/\s+/)
+    var loaded = [], hashes = [], seen = new Set()
+    for (var i = 0; i < tokens.length; i++) {
+      var input = tokens[i]
+      var match = /^(?:🦇)?<?(https:\/\/betterprivacy\.app\/m\/?#v1\.[A-Za-z0-9_.-]+)>?$/.exec(input)
+      var hash = match ? new URL(match[1]).hash : ''
+      var parsed = payload(hash)
+      if (!parsed || input.includes('<') !== input.includes('>')) {
+        var error = document.getElementById('paste-status')
+        error.setAttribute('data-copy', 'pasteInvalid')
+        error.textContent = window.BPUI ? BPUI.text('pasteInvalid') : 'Paste a complete BetterPrivacy link, including the part after #.'
+        error.classList.add('err')
+        error.hidden = false
+        return
+      }
+      if (seen.has(hash)) {
+        document.getElementById('paste-status').removeAttribute('data-copy')
+        setStatus(pasteStatus, 'msg.duplicate', true)
+        return
+      }
+      seen.add(hash); hashes.push(hash); loaded.push(parsed)
     }
-    var nextHash = new URL(match[1]).hash
-    if (location.hash === nextHash) boot()
-    else location.hash = nextHash
+    document.getElementById('paste-status').removeAttribute('data-copy')
+    setStatus(pasteStatus, '')
+    if (loaded.length === 1) {
+      if (location.hash === hashes[0]) boot()
+      else location.hash = hashes[0]
+    } else {
+      // A batch is tab-local, not a new protocol or a URL containing only part 1.
+      history.replaceState(null, '', location.pathname + location.search)
+      loadParts(loaded)
+    }
+  })
+  pasteInput.addEventListener('input', function () {
+    clearMessage()
+    parts = null
+    box.hidden = true
+    phraseInput.value = ''
+    setStatus(batchStatus, '')
+    document.getElementById('paste-status').removeAttribute('data-copy')
+    setStatus(pasteStatus, '')
+  })
+  phraseInput.addEventListener('input', function () {
+    clearMessage()
+    setStatus(msgStatus, 'msg.status.idle')
   })
   window.addEventListener('hashchange', boot)
   boot()
@@ -776,7 +897,9 @@
 
     // Re-render everything composed in JS: status lines keep their key, the
     // drop zone keeps its mono summary, the download button its filename.
-    setStatus(msgStatus, msgStatus.key, msgStatus.err)
+    setStatus(msgStatus, msgStatus.key, msgStatus.err, msgStatus.params)
+    setStatus(batchStatus, batchStatus.key, batchStatus.err, batchStatus.params)
+    if (!pasteStatus.el.hasAttribute('data-copy')) setStatus(pasteStatus, pasteStatus.key, pasteStatus.err)
     setStatus(fileStatus, fileStatus.key, fileStatus.err)
     if (dropMono !== null) dropText.textContent = dropMono
     if (copyTimer) document.getElementById('copy').textContent = t('msg.copied')

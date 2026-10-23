@@ -54,7 +54,7 @@ npm run build
 This creates a distributable bundle at **`dist/BetterPrivacy.plugin.js`**.
 
 Before publishing the plugin and website together, run `npm run verify:release`.
-See [RELEASE-CHECK.md](RELEASE-CHECK.md) for verified flows and the remaining live-device checks.
+See the [release checklist](RELEASE-CHECK.md) for automated verification and live-device checks.
 
 ### Deploy to BetterDiscord
 

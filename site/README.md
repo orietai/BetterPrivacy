@@ -61,6 +61,11 @@ moves above the form. Buttons have visible keyboard focus; errors appear next
 to the action with live status announcements. Clipboard denial selects the
 link for manual copying. Native sharing is offered when supported.
 
+`assets/controls.css` owns the shared button geometry and variants: primary,
+secondary, tertiary and compact. Submit actions are full-width; phrase visibility
+stays beside the input, and result actions wrap on narrow screens. Avoid adding
+reader-only button styling or ID-based overrides in other stylesheets.
+
 The reader keeps existing message and file flows. Its empty state now accepts
 a pasted link. A recipient can create a reply without returning to the landing
 page. The reader clears the phrase after successful decryption and offers a
@@ -76,12 +81,22 @@ https://betterprivacy.app/m#v1.<keyId>.<salt>.<iv>.<ciphertext>
 
 PBKDF2-HMAC-SHA256 at 600,000 iterations derives an AES-256-GCM key.
 The key fingerprint remains the first six bytes of SHA-256(key material).
-The web composer generates a random 16-byte salt and 12-byte IV for each message;
+The web composer generates a random 16-byte salt per submission and a fresh 12-byte IV for each part;
 the salt is carried by the existing v1 envelope, so recipients need only the
 link and phrase. Keys are non-extractable and raw key buffers are cleared.
 
-One web message is limited to 1,360 UTF-8 bytes, matching the plugin's chunk
-budget, so the complete link fits Discord's 2,000-character message ceiling.
+Long web messages split losslessly into parts of at most 1,360 UTF-8 bytes,
+using the plugin's Unicode-safe, whitespace-aware boundaries. Each part is a
+standalone v1 link fitting Discord's 2,000-character message ceiling, opened
+with the same phrase. Results provide numbered copy/open actions and bulk
+copy/share in order. Send each link separately; the reader can open a single
+link or join multiple pasted links with one phrase. Pasted order is preserved
+without adding separators. Every provided part must authenticate before any
+combined plaintext appears. Duplicate or malformed links are rejected; missing
+or reordered parts cannot be detected because v1 has no sequence metadata.
+The batch remains in the tab, not in a new combined URL. One PBKDF2 derivation
+serves all parts of a submission; each encryption uses a fresh IV. Results appear only after every
+part succeeds, and editing the draft invalidates the entire generated set.
 This first web composer creates text messages, not encrypted files.
 The reader still opens plugin-created `.bpenc` files. The plugin can recover
 web-created or shared keys from the v1 salt and phrase after authenticating the
