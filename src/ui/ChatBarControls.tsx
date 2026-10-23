@@ -1,7 +1,7 @@
 /**
  * BetterPrivacy — the chat-bar 🦇 button (v1 simplified UX).
  *
- * ONE button, one mental model: grey = this channel isn't encrypted (click →
+ * A bat toggle plus a visible sending-key picker: grey = not encrypted (click →
  * set a secret phrase, everything else is automatic), amber = phrase needed
  * (click → enter it), green = encrypted (click → pause/resume), red = the send
  * patch is broken and messages would leave as plaintext. Right-click opens a
@@ -20,7 +20,8 @@
 import { PLUGIN_NAME, type PluginContext } from '../types'
 import { resolveCurrentChannelId } from '../modules'
 import { openChannelPhraseModal, openUnlockModal } from './UnlockModal'
-import { friendlyKeyLabel } from './labels'
+import { friendlyKeyLabel, sendKeyLabel } from './labels'
+import { resolveSendKey, selectSendKey } from '../core/sendKey'
 import { t } from '../i18n'
 
 /** Must match RERENDER_EVENT in index.ts (ctx.forceRerender broadcast). */
@@ -94,7 +95,13 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
       setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
+    const focusFrame = requestAnimationFrame(() => {
+      (popRef.current as HTMLElement | null)?.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
+    })
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      cancelAnimationFrame(focusFrame)
+    }
   }, [open])
 
   const encOn = channelId ? ctx.keyring.isEncryptModeOn(channelId) : false
@@ -104,11 +111,10 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
   const sendBroken = ctx.modules.failed.some(
     (f) => /send|MessageActions|upload|CloudUpload/i.test(f),
   )
-  // The channel's key: the explicit active one, else the first applicable key
-  // (auto-adopted on first use so one applicable key needs no picker).
-  const activeKeyId = channelId ? ctx.keyring.getActiveSendKey(channelId) : null
-  let activeEntry = activeKeyId ? ctx.keyring.get(activeKeyId) : undefined
-  if (!activeEntry && channelId) activeEntry = ctx.keyring.forChannel(channelId)[0]
+  const availableKeys = channelId ? ctx.keyring.forChannel(channelId) : []
+  // Use precisely the same policy as text/file sending: never the first of
+  // several keys, and never whichever key was most recently opened to read.
+  const activeEntry = channelId ? resolveSendKey(ctx.keyring, channelId) : undefined
   const unlocked = activeEntry ? ctx.session.isUnlocked(activeEntry.id) : false
 
   const noChannelToast = (): void => {
@@ -142,20 +148,17 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
       return
     }
     if (!activeEntry) {
+      if (availableKeys.length > 1) { setOpen(true); return }
       void openChannelPhraseModal(ctx, channelId).then(() => bump())
       return
     }
     const entry = activeEntry
+    if (!unlocked) {
+      void chooseKey(entry.id)
+      return
+    }
     if (ctx.keyring.getActiveSendKey(channelId) !== entry.id) {
       ctx.keyring.setActiveSendKey(channelId, entry.id)
-    }
-    if (!unlocked) {
-      void openUnlockModal(ctx, entry).then((ok) => {
-        if (!ok) return
-        if (!ctx.keyring.isEncryptModeOn(channelId)) ctx.keyring.setEncryptMode(channelId, true)
-        refresh()
-      })
-      return
     }
     ctx.keyring.setEncryptMode(channelId, !encOn)
     toast(!encOn ? t('bar.encOn') : t('bar.encPaused'), !encOn ? 'success' : 'info')
@@ -171,6 +174,21 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
       return
     }
     void openChannelPhraseModal(ctx, channelId).then(() => bump())
+  }
+
+  const chooseKey = async (id: string): Promise<void> => {
+    if (!channelId) return
+    setOpen(false)
+    try {
+      const ok = await selectSendKey(ctx, channelId, id, entry => openUnlockModal(ctx, entry))
+      if (ok) {
+        const entry = ctx.keyring.get(id)
+        if (entry) toast(t('sending.selected', { label: sendKeyLabel(entry) }), 'success')
+      } else if (sendBroken) toast(t('bar.broken'), 'error')
+    } catch {
+      toast(t('sending.failed'), 'error')
+    }
+    bump()
   }
 
   const forgetKey = (): void => {
@@ -235,7 +253,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
     : !channelId
       ? t('bar.title.noChannel')
       : !activeEntry
-        ? t('bar.title.noKey')
+        ? availableKeys.length > 1 ? t('sending.choose') : t('bar.title.noKey')
         : !unlocked
           ? t('bar.title.locked')
           : encOn
@@ -257,6 +275,18 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
         }}
       >
         {'\u{1F987}'}
+      </button>
+      <button
+        type="button"
+        className={'bp-chatbar-btn bp-key-btn' + stateClass}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={t('sending.picker')}
+        title={activeEntry ? t(encOn ? 'sending.with' : 'sending.paused', { label: sendKeyLabel(activeEntry) }) : t('sending.choose')}
+        onClick={() => setOpen(!open)}
+      >
+        <span>{activeEntry ? sendKeyLabel(activeEntry) : t('sending.choose')}</span>
+        <span aria-hidden="true"> ▾</span>
       </button>
       {open ? renderMenu() : null}
     </div>
@@ -283,7 +313,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
       : !channelId
         ? t('menu.status.noChannel')
         : !activeEntry
-          ? t('menu.status.notEncrypted')
+          ? availableKeys.length > 1 ? t('sending.choose') : t('menu.status.notEncrypted')
           : !unlocked
             ? t('menu.status.needPhrase')
             : encOn
@@ -291,24 +321,45 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
               : t('menu.status.paused')
     return BdApi.ReactDOM.createPortal(
       (
-        <div className="bp-popover" style={style} ref={popRef}>
+        <div className="bp-popover" style={style} ref={popRef} role="dialog" aria-label={t('sending.picker')}
+          onKeyDown={(e: any) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setOpen(false)
+              const controls = rootRef.current as HTMLElement | null
+              controls?.querySelector<HTMLElement>('.bp-key-btn')?.focus()
+            }
+          }}>
           <div className="bp-popover-item" style={{ cursor: 'default', opacity: 0.7 }}>
             {status}
           </div>
           <div className="bp-popover-sep" />
+          <div className="bp-popover-hint">{t('sending.hint')}</div>
+          <div role="group" aria-label={t('sending.picker')}>
+            {availableKeys.map(entry => (
+              <button type="button" key={entry.id}
+                className={'bp-popover-item bp-key-choice' + (activeEntry?.id === entry.id ? ' bp-active' : '')}
+                aria-pressed={activeEntry?.id === entry.id}
+                disabled={sendBroken}
+                onClick={() => void chooseKey(entry.id)}>
+                <span aria-hidden="true">{activeEntry?.id === entry.id ? '✓' : ctx.session.isUnlocked(entry.id) ? '○' : '🔒'}</span>
+                <span>{sendKeyLabel(entry)}</span>
+              </button>
+            ))}
+          </div>
           {channelId ? (
-            <div className="bp-popover-item" onClick={changePhrase}>
-              {activeEntry ? t('menu.changePhrase') : t('menu.setPhrase')}
-            </div>
+            <button type="button" className="bp-popover-item bp-key-choice" onClick={changePhrase}>
+              {availableKeys.length ? t('sending.newPhrase') : t('menu.setPhrase')}
+            </button>
           ) : null}
           {activeEntry ? (
-            <div className="bp-popover-item" onClick={forgetKey}>
+            <button type="button" className="bp-popover-item bp-key-choice" onClick={forgetKey}>
               {t('menu.forgetChannelKey')}
-            </div>
+            </button>
           ) : null}
-          <div className="bp-popover-item" onClick={lockAllNow}>
+          <button type="button" className="bp-popover-item bp-key-choice" onClick={lockAllNow}>
             {t('menu.lockNow')}
-          </div>
+          </button>
           <div className="bp-popover-hint">{t('menu.tip')}</div>
         </div>
       ),
@@ -363,6 +414,20 @@ function findButtonsChildren(node: any, depth = 0): any[] | null {
 // DOM-based fallback
 // ---------------------------------------------------------------------------
 
+// Module lookups can recover after startup. Keep one DOM observer per plugin
+// context so retrying the patch cannot mount duplicate controls.
+const domFallbackContexts = new WeakSet<PluginContext>()
+
+function clearChatBarFailure(ctx: PluginContext): void {
+  // A working DOM mount replaces the optional webpack injection point. Keep
+  // unrelated sending/upload failures visible; clear only this feature.
+  for (let i = ctx.modules.failed.length - 1; i >= 0; i--) {
+    if (ctx.modules.failed[i] === 'ChannelTextArea' || ctx.modules.failed[i] === 'chatBar') {
+      ctx.modules.failed.splice(i, 1)
+    }
+  }
+}
+
 /**
  * Fallback when the React-tree injection point can't be found: watch the DOM
  * and mount a standalone ReactDOM root inside the chat form's buttons
@@ -371,6 +436,9 @@ function findButtonsChildren(node: any, depth = 0): any[] | null {
  * acceptable for v1.
  */
 function startDomFallback(ctx: PluginContext): void {
+  if (domFallbackContexts.has(ctx)) return
+  domFallbackContexts.add(ctx)
+  let disposed = false
   let root: any = null
   let host: HTMLElement | null = null
 
@@ -390,6 +458,7 @@ function startDomFallback(ctx: PluginContext): void {
   }
 
   const tryMount = (): void => {
+    if (disposed) return
     if (host && host.isConnected) return // still mounted, nothing to do
     unmount()
     // ASSUMPTION (fragile): the chat input form contains an element whose
@@ -400,12 +469,16 @@ function startDomFallback(ctx: PluginContext): void {
     if (!(buttonsEl instanceof HTMLElement)) return
     // The React-tree injection may serve this composer (the fallback only
     // covers renders whose tree we couldn't traverse) — never double up.
-    if (buttonsEl.querySelector('.bp-chatbar-controls')) return
+    if (buttonsEl.querySelector('.bp-chatbar-controls')) {
+      clearChatBarFailure(ctx)
+      return
+    }
     host = document.createElement('div')
     host.className = 'bp-chatbar-host'
     buttonsEl.insertBefore(host, buttonsEl.firstChild)
     root = BdApi.ReactDOM.createRoot(host)
     root.render(BdApi.React.createElement(ChatBarControls, { ctx }))
+    clearChatBarFailure(ctx)
     console.info(`[${PLUGIN_NAME}] chat bar controls mounted via DOM fallback`)
   }
 
@@ -425,8 +498,10 @@ function startDomFallback(ctx: PluginContext): void {
   tryMount()
 
   ctx.disposers.push(() => {
+    disposed = true
     observer.disconnect()
     unmount()
+    domFallbackContexts.delete(ctx)
   })
 }
 
@@ -469,12 +544,6 @@ export function resolveTextAreaRenderTarget(ChannelTextArea: any): any | null {
 // ---------------------------------------------------------------------------
 
 export function applyChatBarPatch(ctx: PluginContext): void {
-  const ChannelTextArea = ctx.modules.ChannelTextArea
-  if (!ChannelTextArea) {
-    ctx.modules.failed.push('chatBar')
-    return
-  }
-
   let domFallbackStarted = false
   const startFallbackOnce = (): void => {
     if (domFallbackStarted) return
@@ -482,6 +551,14 @@ export function applyChatBarPatch(ctx: PluginContext): void {
     startDomFallback(ctx)
   }
 
+  // Do not re-add an obsolete lookup failure on a retry after a DOM mount.
+  if (domFallbackContexts.has(ctx)) return
+  const ChannelTextArea = ctx.modules.ChannelTextArea
+  if (!ChannelTextArea) {
+    if (!ctx.modules.failed.includes('chatBar')) ctx.modules.failed.push('chatBar')
+    startFallbackOnce()
+    return
+  }
   // See resolveTextAreaRenderTarget above for the component-shape assumption.
   // If neither shape matches we cannot Patcher.after a render and go straight
   // to the DOM fallback.
@@ -498,6 +575,7 @@ export function applyChatBarPatch(ctx: PluginContext): void {
   let consecutiveMisses = 0
 
   ctx.patcher.after(PLUGIN_NAME, renderTarget, 'render', (_thisObj, _args, ret) => {
+    if (domFallbackContexts.has(ctx)) return ret
     try {
       const buttons = findButtonsChildren(ret)
       if (buttons) {

@@ -113,10 +113,34 @@ const CSS = `
 }
 .bp-key-btn {
   font-size: 12px;
-  max-width: 140px;
+  max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.bp-key-choice {
+  width: 100%;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+.bp-key-choice:disabled { opacity: .5; cursor: not-allowed; }
+.bp-key-choice:focus-visible, .bp-key-btn:focus-visible, .bp-reply-key:focus-visible {
+  outline: 2px solid var(${INDICATOR_PROP}, #3ba55d);
+  outline-offset: 2px;
+}
+.bp-reply-key {
+  margin-left: 8px;
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--background-modifier-hover, rgba(78, 80, 88, .3));
+  color: var(--interactive-normal, #b5bac1);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
 }
 
 /* ---- key-picker popover -------------------------------------------------- */
@@ -242,6 +266,32 @@ const CSS = `
   font-size: 12px;
   margin-top: 2px;
 }
+.bp-language-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.bp-language-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 5px 9px;
+  border: 1px solid var(--background-modifier-accent, #4e5058);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.bp-language-option:has(input:checked) {
+  border-color: var(${INDICATOR_PROP}, #3ba55d);
+  background: var(--background-modifier-selected, rgba(78, 80, 88, .3));
+}
+.bp-language-option:focus-within {
+  outline: 2px solid var(${INDICATOR_PROP}, #3ba55d);
+  outline-offset: 2px;
+}
+.bp-language-option input { margin: 0; accent-color: var(${INDICATOR_PROP}, #3ba55d); }
 .bp-btn {
   background: var(${INDICATOR_PROP}, #3ba55d);
   color: #fff;

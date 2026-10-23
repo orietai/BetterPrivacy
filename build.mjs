@@ -2,7 +2,8 @@ import { build } from 'esbuild'
 
 const meta = `/**
  * @name BetterPrivacy
- * @author BetterPrivacy contributors
+ * @author oriet.ai
+ * @authorLink https://oriet.ai
  * @description Client-side E2E encryption layer for Discord chats, channels and DMs. Passphrase-based symmetric encryption; see README for threat model and ToS disclaimer.
  * @version 1.0.0
  * @website https://betterprivacy.app

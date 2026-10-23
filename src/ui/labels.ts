@@ -25,3 +25,9 @@ export function isChannelKeyLabel(label: string): boolean {
 export function friendlyKeyLabel(entry: { label: string }): string {
   return isChannelKeyLabel(entry.label) ? t('label.thisChannelKey') : `"${entry.label}"`
 }
+
+/** Channel labels can be shared by several phrases; distinguish their keys. */
+export function sendKeyLabel(entry: { id: string; label: string }): string {
+  const name = isChannelKeyLabel(entry.label) ? t('sending.channelKey') : entry.label
+  return `${name} · ${entry.id}`
+}

@@ -24,6 +24,7 @@ import { resolveCurrentChannelId } from '../modules'
 import { encryptFileToBpenc } from '../crypto/bpenc'
 import { openUnlockModal } from '../ui/UnlockModal'
 import { t } from '../i18n'
+import { resolveSendKey } from '../core/sendKey'
 
 /**
  * Hard ceiling regardless of the user's Discord upload cap (spec §5: files
@@ -150,10 +151,12 @@ export function applyUploadPatch(ctx: PluginContext): void {
               throw new UploadAbort(t('up.noAccess'))
             }
 
-            const activeId = ctx.keyring.getActiveSendKey(channelId)
-            const entry = activeId ? ctx.keyring.get(activeId) : undefined
+            const entry = resolveSendKey(ctx.keyring, channelId)
             if (!entry) {
               throw new UploadAbort(t('up.noKey'))
+            }
+            if (ctx.keyring.getActiveSendKey(channelId) !== entry.id) {
+              ctx.keyring.setActiveSendKey(channelId, entry.id)
             }
 
             let key = ctx.session.getKey(entry.id)
@@ -185,8 +188,9 @@ export function applyUploadPatch(ctx: PluginContext): void {
               trueName,
               trueMime,
             )
-            if (ctx.session.getKey(entry.id) !== key || !ctx.keyring.get(entry.id)) {
-              throw new UploadAbort(t('up.cancelledLocked'))
+            if (ctx.session.getKey(entry.id) !== key || !ctx.keyring.get(entry.id) ||
+                !ctx.keyring.isEncryptModeOn(channelId) || resolveSendKey(ctx.keyring, channelId)?.id !== entry.id) {
+              throw new UploadAbort(t('sending.cancelled'))
             }
             const uploadName = `${randomBasename()}.bpenc`
             const newFile = new File([encrypted as unknown as BlobPart], uploadName, {

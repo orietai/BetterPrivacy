@@ -12,6 +12,8 @@ import { decryptText, encryptText } from '../src/crypto/cipher'
 import { encodeWire, parseWire } from '../src/crypto/wire'
 import { decryptBpenc, encryptFileToBpenc, peekBpencSalt } from '../src/crypto/bpenc'
 import { b64urlEncode } from '../src/crypto/b64'
+import { selectSendKey } from '../src/core/sendKey'
+import { applyContextMenuPatches } from '../src/patches/contextMenu'
 import type { KeyEntry, PluginContext, WireParts } from '../src/types'
 
 const CHANNEL = '123456789012345678'
@@ -135,6 +137,91 @@ describe('web ↔ plugin recovery', () => {
 })
 
 describe('plugin send → share', () => {
+  it('keeps history keys open while text and files both use the explicitly selected send key', async () => {
+    const h = harness()
+    const first = await h.arm()
+    const second = await h.ctx.keyring.create('Team', PHRASE + ' second', CHANNEL)
+    await h.ctx.session.unlock(second, PHRASE + ' second')
+    applySendPatch(h.ctx)
+    applyUploadPatch(h.ctx)
+    // Opening B to read history does not switch sending away from A.
+    await h.actions.sendMessage(CHANNEL, { content: 'still A' })
+    expect(parseWire(h.original.mock.calls[0]![1].content)?.keyId).toBe(first.id)
+    expect(await selectSendKey(h.ctx, CHANNEL, second.id, async () => true)).toBe(true)
+    await h.actions.sendMessage(CHANNEL, { content: 'now B' })
+    const parts = parseWire(h.original.mock.calls[1]![1].content)!
+    expect(parts.keyId).toBe(second.id)
+    await expect(decryptText(h.ctx.session.getKey(second.id)!, parts.iv, parts.ciphertext)).resolves.toBe('now B')
+    await new h.CloudUpload(new File(['file for B'], 'note.txt', { type: 'text/plain' })).uploadFileToCloud()
+    const bytes = new Uint8Array(await h.uploaded[0]!.arrayBuffer())
+    const opened = await decryptBpenc(h.ctx.session.getKey(second.id)!, bytes)
+    expect(new TextDecoder().decode(opened.data)).toBe('file for B')
+    expect(h.ctx.session.isUnlocked(first.id)).toBe(true)
+  })
+
+  it('blocks both text and files when multiple keys have no sending selection', async () => {
+    const h = harness()
+    await h.arm()
+    await h.ctx.keyring.create('Team', PHRASE + ' second', CHANNEL)
+    h.ctx.keyring.setActiveSendKey(CHANNEL, null)
+    applySendPatch(h.ctx)
+    applyUploadPatch(h.ctx)
+    await h.actions.sendMessage(CHANNEL, { content: 'must not guess a key' })
+    await expect(new h.CloudUpload(new File(['private'], 'note.txt')).uploadFileToCloud()).rejects.toThrow()
+    expect(h.original).not.toHaveBeenCalled()
+    expect(h.uploaded).toHaveLength(0)
+  })
+
+  it('cancels unsent parts if the sending key changes while a long send is in flight', async () => {
+    const h = harness()
+    await h.arm()
+    const second = await h.ctx.keyring.create('Team', PHRASE + ' second', CHANNEL)
+    h.original.mockImplementationOnce(async () => {
+      h.ctx.keyring.setActiveSendKey(CHANNEL, second.id)
+      return { ok: true }
+    })
+    applySendPatch(h.ctx)
+    await h.actions.sendMessage(CHANNEL, { content: 'a'.repeat(4000) })
+    expect(h.original).toHaveBeenCalledOnce()
+  })
+
+  it('does not upload bytes encrypted with an obsolete selection after a key switch', async () => {
+    const h = harness()
+    await h.arm()
+    const second = await h.ctx.keyring.create('Team', PHRASE + ' second', CHANNEL)
+    const file = new File(['private file'], 'note.txt')
+    const read = file.arrayBuffer.bind(file)
+    vi.spyOn(file, 'arrayBuffer').mockImplementation(async () => {
+      const bytes = await read()
+      h.ctx.keyring.setActiveSendKey(CHANNEL, second.id)
+      return bytes
+    })
+    applyUploadPatch(h.ctx)
+    await expect(new h.CloudUpload(file).uploadFileToCloud()).rejects.toThrow()
+    expect(h.uploaded).toHaveLength(0)
+  })
+
+  it('the message reply-key action selects that key without sending or locking history', async () => {
+    const h = harness()
+    const first = await h.arm()
+    const second = await h.ctx.keyring.create('Team', PHRASE + ' second', CHANNEL)
+    await h.ctx.session.unlock(second, PHRASE + ' second')
+    const callbacks = new Map<string, any>()
+    ;(BdApi as any).ContextMenu = {
+      patch: (name: string, fn: any) => { callbacks.set(name, fn); return () => {} },
+      buildItem: (item: any) => item,
+    }
+    applyContextMenuPatches(h.ctx)
+    const { iv, ct } = await encryptText(h.ctx.session.getKey(second.id)!, 'old message')
+    const content = encodeWire({ keyId: second.id, salt: second.salt, iv, ciphertext: ct })
+    const tree = { props: { children: [] as any[] } }
+    callbacks.get('message')(tree, { message: { content, channel_id: CHANNEL } })
+    await tree.props.children.find(item => item.id === 'bp-reply-key').action()
+    expect(h.ctx.keyring.getActiveSendKey(CHANNEL)).toBe(second.id)
+    expect(h.ctx.session.isUnlocked(first.id)).toBe(true)
+    expect(h.original).not.toHaveBeenCalled()
+  })
+
   it('encrypts long Unicode text into ordered, individually openable links and preserves the draft', async () => {
     const h = harness()
     const entry = await h.arm()

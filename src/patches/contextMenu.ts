@@ -13,6 +13,10 @@
 import type { KeyEntry, PluginContext } from '../types'
 import { parseWire } from '../crypto/wire'
 import { t } from '../i18n'
+import { decryptText } from '../crypto/cipher'
+import { selectSendKey } from '../core/sendKey'
+import { openRecoverKeyModal, openUnlockModal } from '../ui/UnlockModal'
+import { sendKeyLabel } from '../ui/labels'
 
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
@@ -104,6 +108,32 @@ function buildMessageItems(ctx: PluginContext, message: any): any[] {
   const items: any[] = []
 
   if (wire) {
+    const parts = parseWire(message.content)!
+    const channelId = message.channel_id ?? message.channelId
+    if (typeof channelId === 'string' && channelId.length > 0) {
+      items.push({
+        id: 'bp-reply-key', label: t('sending.reply'),
+        action: async () => {
+          try {
+            const revision = ctx.session.revision
+            const previous = ctx.keyring.getActiveSendKey(channelId)
+            const previousMode = ctx.keyring.isEncryptModeOn(channelId)
+            if (!ctx.keyring.get(parts.keyId)) {
+              const ok = await openRecoverKeyModal(ctx, parts, channelId,
+                key => decryptText(key, parts.iv, parts.ciphertext))
+              if (!ok) return
+            }
+            if (ctx.session.revision !== revision || ctx.keyring.getActiveSendKey(channelId) !== previous ||
+                ctx.keyring.isEncryptModeOn(channelId) !== previousMode) return
+            const ok = await selectSendKey(ctx, channelId, parts.keyId, entry => openUnlockModal(ctx, entry))
+            if (ok) {
+              const entry = ctx.keyring.get(parts.keyId)!
+              toast(t('sending.selected', { label: sendKeyLabel(entry) }), 'success')
+            } else toast(t('sending.failed'), 'warning')
+          } catch { toast(t('sending.failed'), 'error') }
+        },
+      })
+    }
     items.push({
       id: 'bp-copy-ciphertext',
       label: t('cm.copyCipher'),

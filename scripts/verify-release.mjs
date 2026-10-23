@@ -35,7 +35,7 @@ for (const [route, doc] of docs) {
   if (doc.querySelectorAll('h1').length !== 1) throw new Error(`${route}: expected one page heading`)
   const ids = [...doc.querySelectorAll('[id]')].map((node) => node.id)
   if (new Set(ids).size !== ids.length) throw new Error(`${route}: duplicate element IDs`)
-  for (const node of doc.querySelectorAll('a[href],script[src],link[rel=stylesheet]')) {
+  for (const node of doc.querySelectorAll('a[href],script[src],img[src],link[rel=stylesheet]')) {
     const raw = node.getAttribute('href') || node.getAttribute('src')
     if (!raw || raw === '#' || !/^(\/|#)/.test(raw)) continue
     const url = new URL(raw, 'https://betterprivacy.app' + route)

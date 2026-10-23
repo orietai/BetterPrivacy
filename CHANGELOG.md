@@ -18,6 +18,10 @@ First public release. No earlier BetterPrivacy version or format is supported.
 ### Discord plugin
 
 - One 🦇 button for setting a phrase, unlocking, and pausing encryption.
+- Visible per-channel sending key with an explicit picker; reading older messages never changes it.
+- Reply-key actions select a key without sending a message; history can stay unlocked with multiple keys.
+- Shared text/file key selection, cancelled-unlock protection, and no guessing between multiple keys.
+- Direct language choices instead of native popup menus; chat-bar DOM fallback also starts when the webpack lookup is missing.
 - Context actions for changing a phrase, forgetting a key, and locking all keys.
 - Encrypted attachment upload and inline decrypted media.
 - `/pt` overrides text only; attachments follow channel mode. Missing upload hooks block normal file-selection/drop/paste flows while encryption is armed.
@@ -28,6 +32,8 @@ First public release. No earlier BetterPrivacy version or format is supported.
 - English, Turkish, and Russian interfaces.
 
 ### Website
+
+- Official oriet.ai attribution and locally served logo with pointer-gated hover effects.
 
 - Browser message creation at `/create/`, with copy and native sharing.
 - Message opening at `/m#v1.…`, plus pasted-link and local `.bpenc` file opening.

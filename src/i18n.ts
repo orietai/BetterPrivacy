@@ -21,6 +21,18 @@ import type { SettingsStore } from './types'
 export type BpLocale = 'en' | 'tr' | 'ru'
 
 const en = {
+  'sending.channelKey': 'Channel key',
+  'sending.picker': 'Sending key',
+  'sending.choose': 'Choose a key',
+  'sending.with': 'Text and files send with {label}',
+  'sending.paused': 'Encryption paused. Selected key: {label}',
+  'sending.hint': 'One key for sending. Opening an older message does not change it.',
+  'sending.newPhrase': '+ Use a new phrase…',
+  'sending.selected': 'Sending with {label}',
+  'sending.failed': 'Could not select the sending key. Your selection was not changed.',
+  'sending.cancelled': 'Send cancelled: the sending key, encryption mode or key availability changed.',
+  'sending.reply': 'Reply using this key',
+  'sending.replyHint': 'Select this key for new messages. Nothing is sent automatically.',
   // ---- common ---------------------------------------------------------------
   'common.cancel': 'Cancel',
   'common.unlock': 'Unlock',
@@ -255,6 +267,18 @@ const en = {
 export type MsgKey = keyof typeof en
 
 const tr: Record<MsgKey, string> = {
+  'sending.channelKey': 'Kanal anahtarı',
+  'sending.picker': 'Gönderim anahtarı',
+  'sending.choose': 'Anahtar seç',
+  'sending.with': 'Metin ve dosyalar şu anahtarla gönderilir: {label}',
+  'sending.paused': 'Şifreleme duraklatıldı. Seçili anahtar: {label}',
+  'sending.hint': 'Gönderim için tek anahtar. Eski bir mesajı açmak bu seçimi değiştirmez.',
+  'sending.newPhrase': '+ Yeni bir ifade kullan…',
+  'sending.selected': 'Gönderim anahtarı: {label}',
+  'sending.failed': 'Gönderim anahtarı seçilemedi. Seçimin değiştirilmedi.',
+  'sending.cancelled': 'Gönderim iptal edildi: gönderim anahtarı, şifreleme modu veya anahtarın kilit durumu değişti.',
+  'sending.reply': 'Bu anahtarla yanıtla',
+  'sending.replyHint': 'Yeni mesajlar için bu anahtarı seçer. Otomatik mesaj gönderilmez.',
   'common.cancel': 'Vazgeç',
   'common.unlock': 'Kilidi aç',
   'common.encrypt': 'Şifrele',
@@ -477,6 +501,18 @@ const tr: Record<MsgKey, string> = {
 }
 
 const ru: Record<MsgKey, string> = {
+  'sending.channelKey': 'Ключ канала',
+  'sending.picker': 'Ключ отправки',
+  'sending.choose': 'Выбрать ключ',
+  'sending.with': 'Текст и файлы отправляются с ключом {label}',
+  'sending.paused': 'Шифрование приостановлено. Выбран ключ: {label}',
+  'sending.hint': 'Один ключ для отправки. Открытие старого сообщения не меняет выбор.',
+  'sending.newPhrase': '+ Использовать новую фразу…',
+  'sending.selected': 'Отправка с ключом {label}',
+  'sending.failed': 'Не удалось выбрать ключ отправки. Ваш выбор не изменён.',
+  'sending.cancelled': 'Отправка отменена: изменился ключ отправки, режим шифрования или доступность ключа.',
+  'sending.reply': 'Ответить с этим ключом',
+  'sending.replyHint': 'Выбирает ключ для новых сообщений. Ничего не отправляется автоматически.',
   'common.cancel': 'Отмена',
   'common.unlock': 'Разблокировать',
   'common.encrypt': 'Зашифровать',

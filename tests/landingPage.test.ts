@@ -36,6 +36,10 @@ describe('restored animated landing page', () => {
       expect(doc.querySelector('a[href="/create/"]')).not.toBeNull()
       expect(doc.querySelector('a[href="/m/"]')).not.toBeNull()
       expect(doc.querySelectorAll('link[href*="fonts.googleapis"]')).toHaveLength(0)
+      expect(doc.querySelector('meta[name="author"]')?.getAttribute('content')).toBe('oriet.ai')
+      const credit = doc.querySelector('footer .oriet-credit-link')
+      expect(credit?.getAttribute('href')).toBe('https://oriet.ai/')
+      expect(credit?.querySelector('img')?.getAttribute('src')).toBe('/assets/oriet-logo.svg')
     } finally { dom.window.close() }
   })
 

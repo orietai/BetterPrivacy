@@ -4,7 +4,10 @@
   "description": "Client-side end-to-end encryption for Discord — a BetterDiscord plugin. One button, one phrase.",
   "homepage": "https://betterprivacy.app",
   "license": "MIT",
-  "author": "R. Kürşat Vuruşan",
+  "author": {
+    "name": "oriet.ai",
+    "url": "https://oriet.ai"
+  },
   "private": true,
   "type": "module",
   "scripts": {

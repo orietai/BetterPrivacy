@@ -245,22 +245,28 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
 
       <h3>{t('km.section.language')}</h3>
       <Row label={t('km.language')} hint={t('km.languageHint')}>
-        <select
-          className="bp-modal-input"
-          style={{ width: 'auto', margin: 0 }}
-          value={settings.language}
-          onChange={(e: any) => {
-            patch({ language: e.target.value })
-            // Chips/menus already on screen hold strings from the old locale —
-            // broadcast so they re-render in the new one.
-            ctx.forceRerender()
-          }}
-        >
-          <option value="auto">{t('km.language.auto')}</option>
-          <option value="en">English</option>
-          <option value="tr">Türkçe</option>
-          <option value="ru">Русский</option>
-        </select>
+        <div className="bp-language-options" role="radiogroup" aria-label={t('km.language')}>
+          {([
+            ['auto', t('km.language.auto')],
+            ['en', 'English'],
+            ['tr', 'Türkçe'],
+            ['ru', 'Русский'],
+          ] as const).map(([value, label]) => (
+            <label key={value} className="bp-language-option">
+              <input
+                type="radio"
+                name="bp-plugin-language"
+                value={value}
+                checked={settings.language === value}
+                onChange={() => {
+                  patch({ language: value })
+                  ctx.forceRerender()
+                }}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
       </Row>
 
       <h3>{t('km.section.session')}</h3>

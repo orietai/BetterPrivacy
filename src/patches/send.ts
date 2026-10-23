@@ -19,6 +19,7 @@ import { encryptText } from '../crypto/cipher'
 import { chunkPlaintext, encodeWire, DISCORD_MESSAGE_LIMIT } from '../crypto/wire'
 import { t } from '../i18n'
 import { openUnlockModal } from '../ui/UnlockModal'
+import { resolveSendKey } from '../core/sendKey'
 
 const PT_PREFIX = '/pt '
 const ENC_REGEX = /^\/enc\s+(\S+)\s+([\s\S]+)$/
@@ -120,9 +121,11 @@ function encryptThenSend(
   thisObj: any,
   args: any[],
   original: (...a: any[]) => any,
+  requireSelected = false,
 ): Promise<any> {
   return (async () => {
-    const stillUnlocked = (): boolean => ctx.session.getKey(entry.id) === key && !!ctx.keyring.get(entry.id)
+    const stillUnlocked = (): boolean => ctx.session.getKey(entry.id) === key && !!ctx.keyring.get(entry.id) &&
+      (!requireSelected || (ctx.keyring.isEncryptModeOn(args[0]) && resolveSendKey(ctx.keyring, args[0])?.id === entry.id))
     let chunks: string[]
     try {
       chunks = chunkPlaintext(plaintext)
@@ -145,7 +148,7 @@ function encryptThenSend(
 
     let wires: string[]
     try {
-      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      if (!stillUnlocked()) { toast(t(requireSelected ? 'sending.cancelled' : 'send.cancelledLocked'), 'warning'); return undefined }
       wires = []
       for (const chunk of chunks) {
         const { iv, ct } = await encryptText(key, chunk)
@@ -167,7 +170,7 @@ function encryptThenSend(
     const firstArgs = [...args]
     firstArgs[1] = { ...message, content: wires[0]! }
     if (wires.length === 1) {
-      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      if (!stillUnlocked()) { toast(t(requireSelected ? 'sending.cancelled' : 'send.cancelledLocked'), 'warning'); return undefined }
       try {
         const result = await Reflect.apply(original, thisObj, firstArgs)
         if (sendResultFailed(result)) toast(t('send.partFailed', { i: 1, n: 1 }), 'error')
@@ -184,7 +187,7 @@ function encryptThenSend(
     toast(t('send.sendingParts', { n: wires.length }), 'info')
     const channelId = args[0]
     for (let i = 0; i < wires.length; i++) {
-      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      if (!stillUnlocked()) { toast(t(requireSelected ? 'sending.cancelled' : 'send.cancelledLocked'), 'warning'); return undefined }
       const partArgs =
         i === 0
           ? firstArgs
@@ -298,25 +301,18 @@ export function applySendPatch(ctx: PluginContext): void {
           // patch owns attachment encryption; let the message action through.
           if (content.length === 0) return passthrough()
 
-          const activeId = ctx.keyring.getActiveSendKey(channelId)
-          let entry = activeId ? ctx.keyring.get(activeId) : undefined
+          const entry = resolveSendKey(ctx.keyring, channelId)
           if (!entry) {
-            // UX: with exactly one applicable key there's nothing to choose —
-            // adopt it instead of dead-ending the send.
-            const available = ctx.keyring.forChannel(channelId)
-            if (available.length === 1) {
-              entry = available[0]!
-              ctx.keyring.setActiveSendKey(channelId, entry.id)
-              toast(t('send.usingKey', { label: entry.label }), 'info')
-            } else {
-              toast(t('send.noKeySelected'), 'warning')
-              return Promise.resolve()
-            }
+            toast(t('send.noKeySelected'), 'warning')
+            return Promise.resolve()
+          }
+          if (ctx.keyring.getActiveSendKey(channelId) !== entry.id) {
+            ctx.keyring.setActiveSendKey(channelId, entry.id)
           }
 
           const key = ctx.session.getKey(entry.id)
           if (key) {
-            return encryptThenSend(ctx, key, entry, content, message, thisObj, args, original)
+            return encryptThenSend(ctx, key, entry, content, message, thisObj, args, original, true)
           }
 
           // Active key is locked: prompt to unlock, then send or drop. NEVER
@@ -333,7 +329,7 @@ export function applySendPatch(ctx: PluginContext): void {
               toast(t('send.cancelledLocked'), 'warning')
               return undefined
             }
-            return encryptThenSend(ctx, unlockedKey, entry, content, message, thisObj, args, original)
+            return encryptThenSend(ctx, unlockedKey, entry, content, message, thisObj, args, original, true)
           })()
         }
 

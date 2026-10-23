@@ -1,5 +1,7 @@
 # 🦇 BetterPrivacy
 
+An open-source project by [oriet.ai](https://oriet.ai/).
+
 A BetterDiscord plugin that adds **client-side end-to-end encryption** to Discord chats, channels, and DMs. Messages are encrypted before they leave your client and decrypted only on render, so Discord's servers see only ciphertext. No external servers, no backend — all crypto happens locally using WebCrypto.
 
 ---
@@ -69,7 +71,8 @@ See [RELEASE-CHECK.md](RELEASE-CHECK.md) for verified flows and the remaining li
 
 ## Quick Start: Usage Walkthrough
 
-Everything runs through **one button**: the 🦇 in the chat bar.
+Use the **🦇 toggle** in the chat bar. The adjacent key label shows which key
+will encrypt new text and files; click the label to choose another key.
 
 | 🦇 color | Meaning | Click does |
 |---|---|---|
@@ -98,11 +101,29 @@ Tell them the phrase — **outside Discord** (in person, or over any encrypted m
 - **Ctrl+Shift+L** (or right-click the 🦇 → "Lock everything now") locks instantly.
 - When locked, messages show as chips; click the 🦇 (or a chip) and re-enter the phrase.
 
-### 4. Right-Click the 🦇 for the Rare Stuff
+### 4. Choose Which Key Sends
+
+Each channel has exactly one sending key. Click its label beside the 🦇 to
+select a saved key or use a new phrase. Keys with the same channel label show
+their public key IDs so they are distinguishable. A locked key asks for its
+phrase; cancelling leaves the previous sending key unchanged.
+
+Opening an older message with another key **does not switch your sending key**.
+Several keys can remain unlocked for reading history. Use **Reply using this
+key** beside a decrypted message or in its context menu to explicitly select
+its key for new messages. This selects the encryption key; it does not send
+anything or create a native Discord reply reference. Use Discord's Reply
+action separately if you want a quoted reply.
+
+When multiple keys exist without a selection, sending is blocked until you
+choose. Text and attachments use the same selection. Explicit `/enc` remains
+a text-only override.
+
+### 5. Right-Click the 🦇 for the Rare Stuff
 
 Change phrase, forget this channel's key, lock everything. Power features — multiple keys per channel with custom labels, key export/import blobs, `/enc <label> <msg>` — live in **Settings → BetterPrivacy** and stay out of the way.
 
-### 5. Slash Command Overrides
+### 6. Slash Command Overrides
 
 **`/pt <message>`** — Send this message as **plaintext only once**, even if encrypt mode is ON:
 
@@ -119,7 +140,7 @@ To send an unencrypted file, explicitly pause encryption first.
 /enc Friends This message goes to friends only
 ```
 
-### 6. Lockdown vs Timeout Modes
+### 7. Lockdown vs Timeout Modes
 
 #### Lockdown OFF (default)
 
@@ -135,12 +156,12 @@ When you switch to a different channel or DM, all decrypted messages **immediate
 
 Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 
-### 7. Channel-Specific Settings
+### 8. Channel-Specific Settings
 
 - **Chat bar:** the single 🦇 button controls the current channel. Encrypt mode and active key are remembered; right-click for more options.
 - **Context menu:** right-click a channel to set a default encryption key for that channel (future messages default to that key).
 
-### 8. Long Messages
+### 9. Long Messages
 
 Nothing to do — type as much as you like and press enter. If the plaintext doesn't fit one encrypted message, the plugin splits it (preferring a break after a space or newline, so parts don't cut mid-word), toasts *"🦇 Long message — sending encrypted in N parts"*, and sends the parts **in order**, each one waiting for the previous to land. Recipients simply see N consecutive decrypted messages.
 
@@ -148,7 +169,7 @@ The budget is **1360 UTF-8 bytes of plaintext per part** — plain English text 
 
 Discord normally refuses to *send* past 2000 characters (4000 with Nitro), and turns a paste bigger than that into a `message.txt` file — either one would stop long text from ever reaching the splitter. So while a channel's encryption is **ON**, the plugin lets the chat box send the whole thing, and keeps a big paste as text in the composer instead of converting it to a file. Discord's own character counter may still show you over the limit; the send goes through anyway. Turn encryption off and Discord's limits are back, unchanged. If a Discord update moves the internals the plugin patches for this, it falls back to the native behaviour: sending, splitting and encryption keep working, you just can't send past 2000/4000 characters in one go (and a big paste becomes a file again — still encrypted, as `.bpenc`).
 
-### 9. Language
+### 10. Language
 
 **Settings → BetterPrivacy → Language** picks the language of the plugin's own UI: **Auto (follow Discord)**, English, Türkçe, or Русский. The default is **Auto**, which takes the language you selected in Discord itself, falls back to your browser/system language, and finally to English. Changing it applies immediately, including to chips and menus already on screen.
 

@@ -23,6 +23,9 @@ import { decryptText } from '../crypto/cipher'
 import { parseWire } from '../crypto/wire'
 import { openRecoverKeyModal, openUnlockModal } from '../ui/UnlockModal'
 import { t } from '../i18n'
+import { selectSendKey } from '../core/sendKey'
+import { sendKeyLabel } from '../ui/labels'
+import { resolveCurrentChannelId } from '../modules'
 
 /** Keep in sync with RERENDER_EVENT in index.ts (not exported from there). */
 const RERENDER_EVENT = 'bp-rerender'
@@ -172,6 +175,24 @@ function EncryptedContent(props: EncryptedContentProps): any {
         title: entry ? t('chip.encryptedWith', { label: entry.label }) : undefined,
       },
       renderMarkdown(ctx, cached.text, props.channelId),
+      entry && props.channelId && ctx.keyring.getActiveSendKey(props.channelId) !== entry.id
+        ? React.createElement('button', {
+            type: 'button', className: 'bp-reply-key', title: t('sending.replyHint'),
+            onClick: async (event: any) => {
+              event.stopPropagation()
+              try {
+                const ok = await selectSendKey(ctx, props.channelId!, parts.keyId, candidate => openUnlockModal(ctx, candidate))
+                if (!ok) return
+                BdApi.UI.showToast(t('sending.selected', { label: sendKeyLabel(entry!) }), { type: 'success' })
+                if (resolveCurrentChannelId(ctx.modules) === props.channelId) {
+                  document.querySelector<HTMLElement>('[class*="channelTextArea"] [role="textbox"][contenteditable="true"]')?.focus()
+                }
+              } catch {
+                BdApi.UI.showToast(t('sending.failed'), { type: 'error' })
+              }
+            },
+          }, t('sending.reply'))
+        : null,
     )
   }
 
