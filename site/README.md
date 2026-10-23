@@ -14,9 +14,9 @@ Open http://localhost:4173. Use localhost or HTTPS: WebCrypto is unavailable
 on an ordinary HTTP LAN address. Open through a local server rather than
 `file://`, because shared assets use root-relative paths.
 
-`build:site` builds the plugin and copies it to
-`site/BetterPrivacy.plugin.js` for the download button. That generated file
-is ignored by Git.
+`build:site` builds the plugin in `dist/`. Downloads use a pinned GitHub Release
+asset. `site/_redirects` sends the former `/BetterPrivacy.plugin.js` URL to that
+same asset using HTTP 302. A plain Python server does not apply Cloudflare redirects.
 
 ## Cloudflare Workers Builds
 

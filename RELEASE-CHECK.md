@@ -14,7 +14,7 @@ npm audit
 
 The release command runs type checking, tests, and the production build. It also
 checks site assets, local links, script syntax, version metadata, and that the
-website download matches the plugin build.
+website download and legacy redirect point to the versioned GitHub Release.
 
 The full dependency audit must also be clean, including development tooling.
 GitHub Actions runs this verification on main pushes and pull requests using
@@ -77,9 +77,21 @@ plugin disable/enable cycle before proceeding with the full checklist below.
 ## Distribution
 
 - Plugin artifact: `dist/BetterPrivacy.plugin.js`
-- Website root: `site/`, including the generated plugin download
+- Website root: `site/`; plugin downloads are hosted on GitHub Releases
 - Message format: `v1`
 - Attachment format: `BPENC1` with a 46-byte fixed prefix
 
 Make the website and plugin download available before announcing the release so
 recipients without the plugin can open shared links.
+
+### Publishing a plugin release
+
+1. Run verification on a clean, committed tree. Tag that exact commit `vX.Y.Z`.
+2. Build `dist/BetterPrivacy.plugin.js` and generate `SHA256SUMS.txt` for it.
+3. Publish a GitHub Release for the tag with both files and release notes. Never
+   silently replace assets of an existing version; publish a new version instead.
+4. Download the public asset and verify its SHA-256 against the local build.
+5. Only after the release is available, update the pinned install URL in
+   `site/index.html` and `site/_redirects`, then deploy the website.
+6. Verify the old website URL returns 302 to the release asset and the final
+   download is JavaScript, not an HTML page. Plain local servers do not test redirects.

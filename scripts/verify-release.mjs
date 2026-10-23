@@ -15,8 +15,15 @@ if (lock.version !== manifest.version || lock.packages[''].version !== manifest.
   throw new Error('Package/lock versions disagree')
 }
 const plugin = await read('dist/BetterPrivacy.plugin.js')
-const download = await read('site/BetterPrivacy.plugin.js')
-if (plugin !== download) throw new Error('Website download differs from built plugin')
+const downloadUrl = `https://github.com/orietai/BetterPrivacy/releases/download/v${manifest.version}/BetterPrivacy.plugin.js`
+const redirects = await read('site/_redirects')
+if (!redirects.split('\n').includes(`/BetterPrivacy.plugin.js ${downloadUrl} 302`)) {
+  throw new Error('Legacy download must redirect to the pinned GitHub Release')
+}
+try {
+  await access(new URL('site/BetterPrivacy.plugin.js', root))
+  throw new Error('Stale plugin artifact remains in website assets')
+} catch (error) { if (error.code !== 'ENOENT') throw error }
 if (!plugin.startsWith('/**') || !plugin.includes(`@version ${manifest.version}\n`)) {
   throw new Error('Plugin metadata/version is missing or inconsistent')
 }
@@ -36,6 +43,9 @@ for (const [route, path] of Object.entries(routes)) {
 }
 
 for (const [route, doc] of docs) {
+  if (route === '/' && ![...doc.querySelectorAll('a[href]')].some(a => a.getAttribute('href') === downloadUrl)) {
+    throw new Error('Install link must point to the pinned GitHub Release')
+  }
   if (doc.querySelectorAll('h1').length !== 1) throw new Error(`${route}: expected one page heading`)
   const languages = [...doc.querySelectorAll('button[type="button"][data-lang]')]
     .map((node) => node.getAttribute('data-lang')).sort()
@@ -60,5 +70,5 @@ for (const [route, doc] of docs) {
   }
   console.log(`OK ${route}: assets, links, headings and script syntax`)
 }
-console.log(`OK v${manifest.version}: plugin = website download`)
+console.log(`OK v${manifest.version}: GitHub Release download and legacy redirect agree`)
 console.log(`SHA-256 ${createHash('sha256').update(plugin).digest('hex')}`)

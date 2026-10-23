@@ -63,7 +63,7 @@ See the [release checklist](RELEASE-CHECK.md) for automated verification and liv
    - **macOS:** `~/Library/Application Support/BetterDiscord/plugins/`
    - **Linux:** `~/.config/BetterDiscord/plugins/`
 
-2. Copy **`dist/BetterPrivacy.plugin.js`** into the plugins folder.
+2. Download **BetterPrivacy.plugin.js** from [GitHub Releases](https://github.com/orietai/BetterPrivacy/releases), or use your local **`dist/BetterPrivacy.plugin.js`** build, and copy it into the plugins folder. Release assets include **SHA256SUMS.txt** for checksum verification.
 
 3. Open Discord, go to **Settings → BetterDiscord → Plugins**, and toggle **BetterPrivacy** ON.
 

@@ -1,4 +1,4 @@
-import { copyFile, readFile } from 'node:fs/promises'
+import { copyFile, readFile, rm } from 'node:fs/promises'
 import { build } from 'esbuild'
 
 // Checked-in output keeps npm test usable before build:site on a fresh clone.
@@ -14,8 +14,7 @@ await copyFile(new URL('../node_modules/qr/LICENSE-MIT', import.meta.url),
   new URL('../site/assets/qr-LICENSE.txt', import.meta.url))
 
 await import('../build.mjs')
-await copyFile(
-  new URL('../dist/BetterPrivacy.plugin.js', import.meta.url),
-  new URL('../site/BetterPrivacy.plugin.js', import.meta.url),
-)
+// Distribution lives in versioned GitHub Releases, not a mutable website copy.
+// Remove only the obsolete generated artifact from earlier builds.
+await rm(new URL('../site/BetterPrivacy.plugin.js', import.meta.url), { force: true })
 console.log('Site ready: serve site/ as the web root.')
