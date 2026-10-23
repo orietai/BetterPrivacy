@@ -182,11 +182,9 @@ export interface SettingsData {
   relockScope: 'all' | 'previousChannelOnly'
   /** Seconds; 0 = never. Default 10800 (3 h), range 300–86400. */
   decryptTimeoutSec: number
-  masterPassphraseEnabled: boolean
   indicatorColor: string // default '#3ba55d'
   maxAutoDownloadBytes: number // default 25 * 1024 * 1024
   memoryBudgetMB: number // default 200
-  clientLinkPreviews: boolean // default false
   /** UI language for the plugin's own strings; 'auto' follows Discord's locale. */
   language: 'auto' | 'en' | 'tr' | 'ru' // default 'auto'
 }

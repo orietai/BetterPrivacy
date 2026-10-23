@@ -362,7 +362,7 @@ A: The plugin caps plaintext files at 64 MiB; Discord's account upload limit als
 
 **Q: Is my keyring encrypted at rest?**
 
-A: Keyring metadata (salt, label, key ID, scope) is stored unencrypted in `BdApi.Data`. Secret phrases and derived keys are not persisted. Master-passphrase protection is not available in this version.
+A: Keyring metadata (salt, label, key ID, scope) is stored unencrypted in `BdApi.Data`. Secret phrases and derived keys are not persisted.
 
 ---
 

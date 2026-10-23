@@ -232,10 +232,6 @@ const en = {
   'km.maxAutoHint': 'Encrypted attachments larger than this are not fetched automatically.',
   'km.memBudget': 'Memory budget (MB)',
   'km.memBudgetHint': 'Decrypted media beyond this budget is LRU-evicted.',
-  'km.section.advanced': 'Advanced',
-  'km.linkPreviews': 'Client-side link previews (experimental — leaks URLs to target sites)',
-  'km.master': 'Master passphrase',
-  'km.masterHint': 'not yet implemented — v1 stores keyring metadata unencrypted',
 
   // ---- context menus --------------------------------------------------------
   'cm.copyCipher': 'Copy ciphertext',
@@ -483,10 +479,6 @@ const tr: Record<MsgKey, string> = {
   'km.maxAutoHint': 'Bundan büyük şifreli ekler kendiliğinden indirilmez.',
   'km.memBudget': 'Bellek bütçesi (MB)',
   'km.memBudgetHint': 'Bütçeyi aşan çözülmüş medya LRU ile bellekten atılır.',
-  'km.section.advanced': 'Gelişmiş',
-  'km.linkPreviews': 'İstemci tarafı bağlantı önizlemeleri (deneysel — URL’leri hedef sitelere sızdırır)',
-  'km.master': 'Ana parola',
-  'km.masterHint': 'henüz uygulanmadı — v1, anahtarlık üstverisini şifresiz saklar',
 
   'cm.copyCipher': 'Şifreli metni kopyala',
   'cm.copied': 'BetterPrivacy: şifreli metin kopyalandı',
@@ -728,10 +720,6 @@ const ru: Record<MsgKey, string> = {
   'km.maxAutoHint': 'Зашифрованные вложения крупнее этого не скачиваются автоматически.',
   'km.memBudget': 'Бюджет памяти (МБ)',
   'km.memBudgetHint': 'Расшифрованные медиа сверх бюджета вытесняются по LRU.',
-  'km.section.advanced': 'Дополнительно',
-  'km.linkPreviews': 'Клиентские превью ссылок (экспериментально — раскрывает URL целевым сайтам)',
-  'km.master': 'Мастер-пароль',
-  'km.masterHint': 'ещё не реализовано — v1 хранит метаданные ключей без шифрования',
 
   'cm.copyCipher': 'Скопировать шифротекст',
   'cm.copied': 'BetterPrivacy: шифротекст скопирован',

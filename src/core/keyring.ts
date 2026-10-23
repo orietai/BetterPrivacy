@@ -6,10 +6,7 @@
  * only ever used transiently in create()/importBlob() to derive the key id
  * and check value, and in Session.unlock() to re-derive the CryptoKey.
  *
- * TODO(master-passphrase): v1 stores the keyring JSON in BdApi.Data as
- * plaintext (labels/salts/KCVs — no secrets). When
- * settings.masterPassphraseEnabled lands, encrypt this JSON at rest with
- * AES-GCM under a PBKDF2 key from the master passphrase (own salt).
+ * BdApi.Data stores only public key metadata (labels/salts/KCVs).
  */
 
 import { PLUGIN_NAME, type KeyEntry, type Keyring, type Scope } from '../types'

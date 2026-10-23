@@ -18,6 +18,7 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Discord plugin
 
+- Remove unused master-passphrase and link-preview settings; keep media limits in a collapsed settings section.
 - Keyboard activation and visible focus for encrypted-message and attachment controls; channel key labels use readable names with distinct key IDs.
 - Key import respects intervening locks and plugin shutdown before automatically unlocking; active-content attachments are downloaded with an inert MIME type.
 - Ambiguous `/enc` labels and deleted sending keys require explicit selection instead of silently choosing another key.

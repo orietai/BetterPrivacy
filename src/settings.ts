@@ -16,11 +16,9 @@ export const DEFAULT_SETTINGS: SettingsData = {
   lockdown: false,
   relockScope: 'all',
   decryptTimeoutSec: 10800,
-  masterPassphraseEnabled: false,
   indicatorColor: '#3ba55d',
   maxAutoDownloadBytes: 25 * 1024 * 1024,
   memoryBudgetMB: 200,
-  clientLinkPreviews: false,
   language: 'auto',
 }
 
@@ -50,9 +48,6 @@ function sanitize(base: SettingsData, raw: unknown): SettingsData {
   if (typeof r['decryptTimeoutSec'] === 'number') {
     out.decryptTimeoutSec = clampTimeout(r['decryptTimeoutSec'])
   }
-  if (typeof r['masterPassphraseEnabled'] === 'boolean') {
-    out.masterPassphraseEnabled = r['masterPassphraseEnabled']
-  }
   if (typeof r['indicatorColor'] === 'string' && r['indicatorColor'].length > 0) {
     out.indicatorColor = r['indicatorColor']
   }
@@ -61,9 +56,6 @@ function sanitize(base: SettingsData, raw: unknown): SettingsData {
   }
   if (typeof r['memoryBudgetMB'] === 'number' && Number.isFinite(r['memoryBudgetMB']) && r['memoryBudgetMB'] > 0) {
     out.memoryBudgetMB = Math.floor(r['memoryBudgetMB'])
-  }
-  if (typeof r['clientLinkPreviews'] === 'boolean') {
-    out.clientLinkPreviews = r['clientLinkPreviews']
   }
   if (r['language'] === 'auto' || r['language'] === 'en' || r['language'] === 'tr' || r['language'] === 'ru') {
     out.language = r['language']

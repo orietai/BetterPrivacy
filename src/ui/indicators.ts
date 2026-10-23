@@ -341,6 +341,9 @@ textarea.bp-modal-input {
 }
 .bp-setting-dropdown { width: 230px; max-width: 40vw; }
 .bp-setting-dropdown > .bd-select { width: 100%; }
+.bp-settings-details { margin-top: 16px; }
+.bp-settings-details > summary { cursor: pointer; color: var(--header-primary, #f2f3f5); font-weight: 600; padding: 6px 0; }
+.bp-settings-details > summary:focus-visible { outline: 2px solid var(${INDICATOR_PROP}, #3ba55d); outline-offset: 2px; }
 .bp-btn {
   background: var(${INDICATOR_PROP}, #3ba55d);
   color: #fff;

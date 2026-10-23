@@ -355,7 +355,8 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         />
       </Row>
 
-      <h3>{t('km.section.media')}</h3>
+      <details className="bp-settings-details">
+      <summary>{t('km.section.media')}</summary>
       <Row label={t('km.maxAuto')} hint={t('km.maxAutoHint')}>
         <input
           className="bp-modal-input"
@@ -383,18 +384,8 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           }
         />
       </Row>
+      </details>
 
-      <h3>{t('km.section.advanced')}</h3>
-      <Row label={t('km.linkPreviews')}>
-        <input
-          type="checkbox"
-          checked={settings.clientLinkPreviews}
-          onChange={(e: any) => patch({ clientLinkPreviews: e.target.checked })}
-        />
-      </Row>
-      <Row label={t('km.master')} hint={t('km.masterHint')}>
-        <input type="checkbox" checked={settings.masterPassphraseEnabled} disabled />
-      </Row>
     </div>
   )
 }
