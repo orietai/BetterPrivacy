@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Create a private message — BetterPrivacy</title>
+<meta name="description" content="Encrypt a message on your phone or computer. Share a link anyone can open with your secret phrase. No installation or account.">
+<meta name="referrer" content="no-referrer">
+<link rel="canonical" href="https://betterprivacy.app/create/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/tools-skin.css">
+<script src="/assets/site.js" defer></script>
+<script src="/assets/create.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main" data-copy="skip">Skip to content</a>
+<header class="site-header">
+<a class="brand" href="/"><span class="tile" aria-hidden="true">🦇</span>BetterPrivacy</a>
+<nav class="site-nav" aria-label="Main"><a href="/m/" data-copy="openNav">Open a message</a><a class="desktop-nav" href="/#install" data-copy="pluginNav">Discord plugin</a>
+<div class="langs" id="langs" aria-label="Language"><button type="button" data-lang="en">EN</button><button type="button" data-lang="tr">TR</button><button type="button" data-lang="ru">RU</button></div></nav>
+</header>
+<main id="main" class="tool-main">
+<aside class="tool-intro">
+<nav class="tool-tabs" aria-label="Message tools"><a href="/create/" aria-current="page" data-copy="createTab">Create</a><a href="/m/" data-copy="openTab">Open</a></nav>
+<h1 data-copy="createTitle">Some things are just between you.</h1>
+<p data-copy="createLead">Turn your message into a private link. Only someone with your secret phrase can open it.</p>
+<div class="tool-guide"><strong data-copy="nextTitle">What happens next?</strong><p data-copy="nextBody">Send the link in any chat. Share the phrase separately. Your recipient can open it on their phone without installing anything.</p></div>
+</aside>
+<div>
+<section class="tool-panel" aria-labelledby="compose-title">
+<h2 id="compose-title" data-copy="composeTitle">Write a private message</h2>
+<form id="create-form" novalidate>
+<label for="message" data-copy="messageLabel">Your message</label>
+<textarea id="message" rows="7" placeholder="What would you like to keep between you?" data-copy-placeholder="messagePlaceholder" required spellcheck="false" autocomplete="off" aria-describedby="message-budget"></textarea>
+<div class="field-meta"><span data-copy="limitHint">One message, one link.</span><output id="message-budget" for="message">0 / 1,360 bytes</output></div>
+<label for="create-phrase" data-copy="phraseLabel">Secret phrase</label>
+<div class="phrase-field"><input id="create-phrase" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="phrase-help"><button id="show-phrase" type="button" aria-pressed="false" aria-controls="create-phrase" data-copy="showPhrase">Show</button></div>
+<p class="field-help" id="phrase-help" data-copy="phraseHelp">Use a long, unique phrase. Spaces and capital letters count. Share it separately from the link.</p>
+<button class="button" id="create-submit" type="submit" data-copy="encryptCta">Encrypt & create link</button>
+<p class="status" id="create-status" role="status" aria-live="polite"></p>
+</form>
+<section class="generated" id="generated" aria-labelledby="generated-title" hidden>
+<h2 id="generated-title" tabindex="-1" data-copy="readyTitle">Your private link is ready.</h2>
+<p class="field-help" data-copy="readyHelp">Share this link. Tell your recipient the phrase separately.</p>
+<label for="share-link" data-copy="linkLabel">Encrypted message link</label>
+<textarea id="share-link" readonly rows="3" spellcheck="false" aria-describedby="share-status"></textarea>
+<div class="actions"><button class="button" type="button" id="copy-link" data-copy="copyLink">Copy link</button><button class="button secondary" type="button" id="share-native" data-copy="shareLink" hidden>Share…</button><a class="text-link" id="open-created" target="_blank" rel="noopener noreferrer" data-copy="testLink">Open this message</a></div>
+<p class="status" id="share-status" role="status" aria-live="polite"></p>
+<button class="button secondary" type="button" id="start-over" data-copy="startOver">Write another message</button>
+<p class="fine" data-copy="noExpiry">This link doesn't expire. Anyone with the link and phrase can read it.</p>
+</section>
+<p class="fine" data-copy="localNote">Encryption happens in this tab. Your message and phrase aren't sent to our server.</p>
+<noscript><p>JavaScript is required to encrypt locally in your browser.</p></noscript>
+</section>
+<div class="tool-secondary"><a href="/m/" data-copy="receivedLink">Received a link instead? Open it here.</a><a href="/#install" data-copy="discordShortcut">Use BetterPrivacy in Discord</a></div>
+</div>
+</main>
+<footer class="site-footer"><span>🦇 BetterPrivacy</span><nav><a href="/" data-copy="home">Home</a><a href="/m/" data-copy="openNav">Open a message</a><a href="/terms/" data-copy="terms">Terms</a></nav></footer>
+</body></html>

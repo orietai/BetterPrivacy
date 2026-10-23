@@ -9,6 +9,8 @@
  * remain fully supported alongside.
  */
 
+import { t } from '../i18n'
+
 export const CHANNEL_LABEL_PREFIX = 'channel:'
 
 export function channelKeyLabel(channelId: string): string {
@@ -21,5 +23,5 @@ export function isChannelKeyLabel(label: string): boolean {
 
 /** Human wording for UI surfaces: hides the synthetic channel-label internals. */
 export function friendlyKeyLabel(entry: { label: string }): string {
-  return isChannelKeyLabel(entry.label) ? "this channel's key" : `"${entry.label}"`
+  return isChannelKeyLabel(entry.label) ? t('label.thisChannelKey') : `"${entry.label}"`
 }

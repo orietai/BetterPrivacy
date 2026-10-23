@@ -23,7 +23,7 @@ import type { PluginContext } from '../types'
 import { resolveCurrentChannelId } from '../modules'
 import { encryptFileToBpenc } from '../crypto/bpenc'
 import { openUnlockModal } from '../ui/UnlockModal'
-import { isPlaintextOverrideActive } from './send'
+import { t } from '../i18n'
 
 /**
  * Hard ceiling regardless of the user's Discord upload cap (spec §5: files
@@ -54,9 +54,43 @@ function randomBasename(): string {
   return out
 }
 
+const guardedContexts = new WeakSet<PluginContext>()
+
+/** Prevent normal file-selection/drop/paste flows from bypassing a missing upload hook. */
+function installUploadSafetyGuard(ctx: PluginContext): void {
+  if (typeof document === 'undefined' || guardedContexts.has(ctx)) return
+  guardedContexts.add(ctx)
+  const guard = (event: Event): void => {
+    if (!ctx.modules.failed.some((failure) => /upload/i.test(failure))) return
+    const target = event.target as HTMLInputElement | null
+    const files = (event as DragEvent).dataTransfer?.files ??
+      (event as ClipboardEvent).clipboardData?.files ??
+      (target?.type === 'file' ? target.files : null)
+    if (!files?.length) return
+    let block = true
+    try {
+      const channelId = resolveCurrentChannelId(ctx.modules)
+      block = channelId ? ctx.keyring.isEncryptModeOn(channelId) : ctx.keyring.list().length > 0
+    } catch { /* Unknown encryption state: block rather than upload plaintext. */ }
+    if (!block) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (target?.type === 'file') target.value = ''
+    toast(t('up.unavailable'), 'error')
+  }
+  const events = ['input', 'change', 'drop', 'paste']
+  for (const event of events) document.addEventListener(event, guard, true)
+  ctx.disposers.push(() => {
+    for (const event of events) document.removeEventListener(event, guard, true)
+    guardedContexts.delete(ctx)
+  })
+}
+
 export function applyUploadPatch(ctx: PluginContext): void {
   const { modules } = ctx
   const CloudUpload = modules.CloudUpload
+  const encryptedFiles = new WeakSet<Blob>()
+  installUploadSafetyGuard(ctx)
 
   if (!CloudUpload?.prototype || typeof CloudUpload.prototype.uploadFileToCloud !== 'function') {
     modules.failed.push('upload: CloudUpload.uploadFileToCloud unavailable')
@@ -83,21 +117,18 @@ export function applyUploadPatch(ctx: PluginContext): void {
           // keyring, the user may rely on encryption — blocking beats leaking
           // plaintext. With an empty keyring, plaintext is the only possibility.
           if (ctx.keyring.list().length > 0) {
-            throw new UploadAbort(
-              'BetterPrivacy: cannot determine the channel — upload blocked to avoid a plaintext leak; switch channels once and retry',
-            )
+            throw new UploadAbort(t('up.noChannel'))
           }
           return passthrough()
         }
 
-        // Plaintext paths: mode off / '/pt ' override for this channel's send.
-        if (!ctx.keyring.isEncryptModeOn(channelId) || isPlaintextOverrideActive(channelId)) {
+        // /pt applies only to message text. Files always follow channel mode.
+        if (!ctx.keyring.isEncryptModeOn(channelId)) {
           return passthrough()
         }
 
-        // Known instance shapes (mid-2025): the file rides on this.item.file;
-        // older builds kept it on this.file directly. Both probed defensively.
-        const file: unknown = thisObj?.item?.file ?? thisObj?.file
+        // The upload queue owns the file on its item record.
+        const file: unknown = thisObj?.item?.file
         const currentName: string =
           typeof thisObj?.filename === 'string'
             ? thisObj.filename
@@ -105,9 +136,9 @@ export function applyUploadPatch(ctx: PluginContext): void {
               ? file.name
               : ''
 
-        // Already-encrypted payload (e.g. an internal retry re-invoking upload) —
-        // don't double-encrypt.
-        if (currentName.toLowerCase().endsWith('.bpenc')) return passthrough()
+        // Only our own ciphertext may bypass encryption on an internal retry.
+        // A filename ending in .bpenc is not proof that its bytes are encrypted.
+        if (file instanceof Blob && encryptedFiles.has(file)) return passthrough()
 
         // Encryption needed: async from here (file read + WebCrypto), so return
         // the promise — uploadFileToCloud is promise-returning anyway.
@@ -116,17 +147,13 @@ export function applyUploadPatch(ctx: PluginContext): void {
             if (!(file instanceof Blob)) {
               // Encrypt mode is ON but the upload item shape is unrecognized.
               // NEVER fall through to a plaintext upload — abort instead.
-              throw new UploadAbort(
-                'BetterPrivacy: cannot access the file to encrypt it — upload aborted',
-              )
+              throw new UploadAbort(t('up.noAccess'))
             }
 
             const activeId = ctx.keyring.getActiveSendKey(channelId)
             const entry = activeId ? ctx.keyring.get(activeId) : undefined
             if (!entry) {
-              throw new UploadAbort(
-                'BetterPrivacy: encrypt mode is ON but no key is selected — upload aborted',
-              )
+              throw new UploadAbort(t('up.noKey'))
             }
 
             let key = ctx.session.getKey(entry.id)
@@ -139,29 +166,37 @@ export function applyUploadPatch(ctx: PluginContext): void {
                 ok = false
               }
               key = ok ? ctx.session.getKey(entry.id) : null
-              if (!key) throw new UploadAbort('BetterPrivacy: upload cancelled — key locked')
+              if (!key) throw new UploadAbort(t('up.cancelledLocked'))
             }
 
             if (file.size > HARD_CAP_BYTES) {
-              throw new UploadAbort(
-                'BetterPrivacy: file too large to encrypt (64 MB max) — upload aborted',
-              )
+              throw new UploadAbort(t('up.tooLarge'))
             }
 
             const data = new Uint8Array(await file.arrayBuffer())
             const trueName = file instanceof File && file.name ? file.name : currentName || 'file'
             const trueMime = file.type || 'application/octet-stream'
 
-            const encrypted = await encryptFileToBpenc(key, entry.id, data, trueName, trueMime)
+            const encrypted = await encryptFileToBpenc(
+              key,
+              entry.id,
+              entry.salt,
+              data,
+              trueName,
+              trueMime,
+            )
+            if (ctx.session.getKey(entry.id) !== key || !ctx.keyring.get(entry.id)) {
+              throw new UploadAbort(t('up.cancelledLocked'))
+            }
             const uploadName = `${randomBasename()}.bpenc`
             const newFile = new File([encrypted as unknown as BlobPart], uploadName, {
               type: 'application/octet-stream',
             })
+            encryptedFiles.add(newFile)
 
             // Swap the ciphertext file into the CloudUpload instance; mirror the
             // rename/resize onto whichever metadata fields this build carries.
-            if (thisObj?.item && 'file' in thisObj.item) thisObj.item.file = newFile
-            else thisObj.file = newFile
+            thisObj.item.file = newFile
             if (typeof thisObj.filename === 'string') thisObj.filename = uploadName
             if (thisObj?.item && typeof thisObj.item.filename === 'string') {
               thisObj.item.filename = uploadName
@@ -169,13 +204,10 @@ export function applyUploadPatch(ctx: PluginContext): void {
             if (typeof thisObj.size === 'number') thisObj.size = newFile.size
             if (typeof thisObj.mimeType === 'string') thisObj.mimeType = 'application/octet-stream'
 
-            toast(`BetterPrivacy: attachment encrypted with "${entry.label}"`, 'success')
+            toast(t('up.encrypted', { label: entry.label }), 'success')
             return await passthrough()
           } catch (err: any) {
-            const message =
-              err instanceof UploadAbort
-                ? err.message
-                : 'BetterPrivacy: attachment encryption failed — upload aborted'
+            const message = err instanceof UploadAbort ? err.message : t('up.failed')
             if (!(err instanceof UploadAbort)) {
               console.error('[BetterPrivacy] upload patch error', err)
             }
@@ -189,10 +221,7 @@ export function applyUploadPatch(ctx: PluginContext): void {
         // Fail SAFE: a throwing prelude means the encrypt/plaintext decision
         // could not be made — abort the upload, never fall through to a
         // possibly-plaintext passthrough.
-        const message =
-          err instanceof UploadAbort
-            ? err.message
-            : 'BetterPrivacy: upload check failed — upload aborted'
+        const message = err instanceof UploadAbort ? err.message : t('up.checkFailed')
         if (!(err instanceof UploadAbort)) {
           console.error('[BetterPrivacy] upload patch error', err)
         }

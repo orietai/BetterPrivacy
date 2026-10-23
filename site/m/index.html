@@ -6,6 +6,7 @@
 <title>Decrypt a message — BetterPrivacy</title>
 <meta name="description" content="Open an encrypted BetterPrivacy message with its secret phrase. Everything decrypts in your browser — the payload never reaches any server.">
 <meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
 
 <meta property="og:type" content="website">
@@ -13,197 +14,54 @@
 <meta property="og:description" content="Encrypted with BetterPrivacy. Open the link and enter the secret phrase — it decrypts in your browser, never on a server.">
 <meta name="twitter:card" content="summary">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..750&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<style>
-  :root {
-    --bg: #050505;
-    --bg-2: #0b0d10;
-    --bg-3: #12151a;
-    --line: rgba(235, 240, 248, 0.08);
-    --line-strong: rgba(235, 240, 248, 0.16);
-    --text: #edeff2;
-    --muted: #8d949f;
-    --faint: #545b66;
-    --green: #3ba55d;
-    --green-text: #5abc7c;
-    --green-glow: rgba(59, 165, 93, 0.35);
-    --red: #ed4245;
-    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-    --ease: ease;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.6 var(--sans);
-    -webkit-font-smoothing: antialiased;
-    min-height: 100dvh;
-    display: flex; flex-direction: column;
-  }
-
-  /* film grain */
-  body::after {
-    content: ''; position: fixed; inset: 0; z-index: 90; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
-    opacity: 0.03;
-  }
-
-  ::selection { background: rgba(59, 165, 93, 0.3); }
-  a { color: var(--green-text); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-
-  header { padding: 20px 24px; }
-  .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--text); }
-  .brand:hover { text-decoration: none; }
-  .brand .tile {
-    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
-    font-size: 13px; background: rgba(59, 165, 93, 0.14);
-    box-shadow: inset 0 0 0 1px var(--green);
-  }
-
-  main {
-    flex: 1; display: grid; place-items: center;
-    padding: 24px 24px 64px;
-  }
-  .card-wrap { width: min(560px, 100%); position: relative; }
-  /* green glow appears on successful decrypt */
-  .card-wrap::before {
-    content: ''; position: absolute; inset: -70px -90px; z-index: -1;
-    background: radial-gradient(50% 60% at 50% 50%, var(--green-glow), transparent 70%);
-    opacity: 0; filter: blur(40px);
-    transition: opacity 800ms var(--ease);
-    pointer-events: none;
-  }
-  .card-wrap.lit::before { opacity: 0.5; }
-
-  /* double-bezel shell, same as the homepage demo */
-  .shell {
-    padding: 7px;
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid var(--line);
-    border-radius: 20px;
-    box-shadow: 0 48px 120px -40px rgba(0, 0, 0, 0.95);
-  }
-  .card {
-    background: var(--bg-2);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 13px;
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.05);
-    padding: 26px 26px 24px;
-  }
-
-  .card h1 { font-size: 19px; font-weight: 650; letter-spacing: -0.02em; display: flex; align-items: center; gap: 9px; }
-  .keyid { margin-top: 6px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
-  .keyid b { color: var(--muted); font-weight: 500; }
-
-  .cipher-preview {
-    margin-top: 16px; padding: 12px 14px;
-    background: var(--bg); border: 1px solid var(--line); border-radius: 9px;
-    font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--faint);
-    word-break: break-all; max-height: 92px; overflow: hidden; position: relative;
-  }
-  .cipher-preview::after {
-    content: ''; position: absolute; inset: auto 0 0; height: 34px;
-    background: linear-gradient(transparent, var(--bg));
-  }
-
-  form { margin-top: 18px; }
-  label {
-    display: block; font-size: 10px; font-weight: 650; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
-  }
-  .row { display: flex; gap: 10px; }
-  input[type="password"], input[type="text"] {
-    flex: 1; min-width: 0;
-    background: var(--bg); border: 1px solid var(--line-strong); border-radius: 9px;
-    padding: 11px 14px; color: var(--text);
-    font-family: var(--mono); font-size: 13.5px; outline: none;
-    transition: border-color 150ms var(--ease);
-  }
-  input:focus { border-color: var(--green); }
-  button {
-    background: var(--green); color: #fff; border: none; border-radius: 9px;
-    padding: 11px 20px; font: 600 14px var(--sans); cursor: pointer;
-    transition: background-color 150ms var(--ease), transform 160ms var(--ease-out), opacity 150ms var(--ease);
-    white-space: nowrap;
-  }
-  button:hover { background: #44b467; }
-  button:active { transform: scale(0.97); }
-  button:disabled { opacity: 0.55; cursor: wait; transform: none; }
-
-  .status { margin-top: 12px; font-size: 12.5px; color: var(--faint); min-height: 1.2em; }
-  .status.err { color: var(--red); }
-
-  /* decrypted result — blur crossfade in, like the plugin */
-  .result {
-    margin-top: 18px; padding: 16px 18px;
-    background: rgba(59, 165, 93, 0.07);
-    border: 1px solid rgba(59, 165, 93, 0.35); border-radius: 10px;
-    font-size: 15px; line-height: 1.6; color: var(--green-text);
-    overflow-wrap: anywhere; white-space: pre-wrap;
-    opacity: 0; filter: blur(7px);
-    transition: opacity 420ms var(--ease), filter 420ms var(--ease);
-  }
-  .result.show { opacity: 1; filter: blur(0); }
-  .result::before { content: '🦇 '; font-size: 0.8em; opacity: 0.65; }
-  @media (prefers-reduced-motion: reduce) { .result { transition: none; } }
-  .result-tools { margin-top: 10px; display: flex; gap: 14px; align-items: center; }
-  .result-tools a, .result-tools .copy {
-    background: none; border: none; padding: 0;
-    font: 500 12.5px var(--sans); color: var(--muted); cursor: pointer;
-  }
-  .result-tools .copy:hover, .result-tools a:hover { color: var(--text); background: none; text-decoration: none; transform: none; }
-
-  .privacy-note {
-    margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line);
-    font-size: 12px; line-height: 1.7; color: var(--faint);
-  }
-
-  .cta { margin-top: 18px; text-align: center; }
-  .cta a {
-    display: inline-flex; align-items: center; gap: 9px;
-    background: transparent; color: var(--muted);
-    border: 1px solid var(--line-strong); border-radius: 999px;
-    padding: 9px 18px; font-size: 13.5px; font-weight: 560;
-  }
-  .cta a:hover { color: var(--text); border-color: var(--faint); text-decoration: none; }
-
-  [hidden] { display: none !important; }
-
-  footer { padding: 20px 24px 26px; text-align: center; font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
-</style>
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/reader.css">
+<link rel="stylesheet" href="/assets/tools-skin.css">
 </head>
 <body>
 
-<header>
+<a class="skip" href="#main" data-copy="skip">Skip to content</a>
+<header class="site-header">
   <a class="brand" href="/"><span class="tile">🦇</span>BetterPrivacy</a>
+  <nav class="site-nav" aria-label="Main"><a href="/create/" data-copy="createNav">Create a message</a><a class="desktop-nav" href="/#install" data-copy="pluginNav">Discord plugin</a><div class="langs" id="langs">
+    <button type="button" data-lang="en">EN</button>
+    <span class="sep">·</span>
+    <button type="button" data-lang="tr">TR</button>
+    <span class="sep">·</span>
+    <button type="button" data-lang="ru">RU</button>
+  </div></nav>
 </header>
 
-<main>
+<main class="tool-main" id="main">
+<aside class="tool-intro">
+<nav class="tool-tabs" aria-label="Message tools"><a href="/create/" data-copy="createTab">Create</a><a href="/m/" aria-current="page" data-copy="openTab">Open</a></nav>
+<h1 data-copy="readerTitle">A message just for you.</h1>
+<p data-copy="readerLead">Open the link. Enter the secret phrase. The message decrypts on your device.</p>
+<div class="tool-guide"><strong data-copy="nextTitle">What happens next?</strong><p data-copy="nextBody">Send the link in any chat. Share the phrase separately. Your recipient can open it on their phone without installing anything.</p><a class="text-link" href="/create/" data-copy="newMessage">Create a private message of your own.</a></div>
+</aside>
+<div class="reader-workspace">
   <div class="card-wrap" id="wrap">
     <div class="shell">
       <!-- no / malformed payload -->
       <div class="card" id="empty" hidden>
-        <h1>🦇 Nothing to decrypt</h1>
-        <p style="margin-top:12px; color:var(--muted); font-size:14.5px;">
-          This page opens encrypted <b style="color:var(--text)">BetterPrivacy</b> messages.
-          When someone using the plugin sends an encrypted message on Discord, it looks like a
-          🦇 link pointing here — clicking it brings the scrambled payload along, and the
-          secret phrase unlocks it right in your browser.
+        <h2 data-i18n="empty.title">🦇 Nothing to decrypt</h2>
+        <p style="margin-top:12px; color:var(--muted); font-size:14.5px;" data-i18n="empty.body">
+          Paste a BetterPrivacy message link below, or choose an encrypted file further down.
         </p>
-        <p style="margin-top:10px; color:var(--muted); font-size:14.5px;" id="malformed-note" hidden>
-          The link you followed carries a payload this page doesn't recognize — it may have
+        <p style="margin-top:10px; color:var(--muted); font-size:14.5px;" id="malformed-note" data-i18n="empty.malformed" hidden>
+          The link you followed carries a payload this page doesn’t recognize — it may have
           been truncated while copying. Ask the sender to copy the whole message.
         </p>
-        <div class="cta"><a href="/#install">Get the plugin — encrypt your own channels</a></div>
-        <p class="privacy-note">
+        <form id="paste-form" novalidate>
+<label for="paste-link" data-copy="pasteLabel">BetterPrivacy link</label>
+<textarea id="paste-link" rows="3" spellcheck="false" autocomplete="off" aria-describedby="paste-help paste-status"></textarea>
+<p class="input-help" id="paste-help" data-copy="pasteHelp">Paste the complete link you received here.</p>
+<button type="submit" data-copy="pasteCta">Open link</button>
+<p id="paste-status" role="status" aria-live="polite"></p>
+</form>
+<div class="cta"><a href="/create/" data-copy="newMessage">Create a private message of your own.</a></div>
+        <p class="privacy-note" data-i18n="empty.note">
           No accounts, no servers, no analytics. The encrypted payload travels in the URL
           fragment (the part after #), which your browser never sends to any server — including ours.
         </p>
@@ -211,43 +69,215 @@
 
       <!-- decrypt flow -->
       <div class="card" id="box" hidden>
-        <h1>🦇 Encrypted message</h1>
-        <p class="keyid">key fingerprint <b id="fp"></b> · AES-256-GCM · PBKDF2 ×600,000</p>
+        <h2 data-i18n="msg.title">🦇 Encrypted message</h2>
+        <details class="message-details"><summary data-copy="messageDetails">Message details</summary><p class="keyid"><span data-i18n="msg.fp">key fingerprint</span> <b id="fp"></b> · AES-256-GCM</p></details>
         <div class="cipher-preview" id="preview"></div>
 
         <form id="form">
-          <label for="phrase">Secret phrase</label>
+          <label for="phrase" data-i18n="msg.phraseLabel">Secret phrase</label>
           <div class="row">
-            <input type="password" id="phrase" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="the phrase the sender shared with you">
-            <button type="submit" id="go">Decrypt</button>
+            <input type="password" id="phrase" autocomplete="off" autocapitalize="off" spellcheck="false"
+                   data-i18n-ph="msg.phrasePh" placeholder="the phrase the sender shared with you">
+            <button type="button" id="show-reader-phrase" aria-pressed="false" aria-controls="phrase" data-copy="showPhrase">Show</button>
+            <button type="submit" id="go" data-i18n="msg.decrypt">Decrypt</button>
           </div>
         </form>
-        <p class="status" id="status">Enter the phrase the sender gave you — outside Discord, ideally.</p>
+        <p class="status" id="status" role="status" aria-live="polite">Enter the phrase the sender gave you — outside Discord, ideally.</p>
 
-        <div class="result" id="result" hidden></div>
+        <div class="result" id="result" tabindex="-1" hidden></div>
         <div class="result-tools" id="tools" hidden>
-          <button class="copy" type="button" id="copy">Copy plaintext</button>
-          <a href="/#install">Get the plugin to read these inline →</a>
+          <button class="copy" type="button" id="copy" data-i18n="msg.copy">Copy plaintext</button>
+          <button type="button" id="forget-message" data-copy="hideMessage">Hide message</button>
+          <a href="/create/" data-copy="newMessage">Create a private message of your own.</a>
         </div>
 
-        <p class="privacy-note">
-          Everything happens in this browser tab. The payload lives in the URL fragment, which is
-          never sent to any server — ours included. The phrase isn't stored, logged, or transmitted;
-          reload the page and both are gone. Received a <span style="font-family:var(--mono)">.bpenc</span>
-          file instead? Encrypted attachments currently need the plugin.
+        <p class="privacy-note" data-i18n="msg.note">
+          Your phrase stays in this tab. The link keeps the encrypted message so you can reopen it later. Share the phrase separately.
         </p>
       </div>
     </div>
   </div>
+
+  <!-- .bpenc file decryption — always available -->
+  <div class="card-wrap" id="fwrap"><span id="files"></span>
+    <div class="shell">
+      <div class="card">
+        <h2 data-i18n="file.title">🦇 Decrypt a file</h2>
+
+        <div class="drop" id="drop" role="button" tabindex="0">
+          <span id="drop-text" data-i18n="file.drop">Drop a .bpenc file here — or click to choose</span>
+        </div>
+        <input type="file" id="file-input" accept=".bpenc" hidden>
+
+        <p class="privacy-note plain" data-i18n="file.hint">
+          Encrypted attachments download from Discord as randomly-named .bpenc files.
+          The real name is sealed inside the encryption.
+        </p>
+
+        <div id="file-unlock" hidden>
+          <form id="file-form">
+            <label for="fphrase" data-i18n="file.phraseLabel">Secret phrase</label>
+            <div class="row">
+              <input type="password" id="fphrase" autocomplete="off" autocapitalize="off" spellcheck="false"
+                     data-i18n-ph="file.phrasePh" placeholder="the phrase this channel uses">
+              <button type="submit" id="fgo" data-i18n="file.decrypt">Decrypt</button>
+            </div>
+          </form>
+        </div>
+        <p class="status" id="file-status" role="status" aria-live="polite" hidden></p>
+
+        <div class="file-result" id="file-result" hidden>
+          <p class="file-meta" id="file-meta"></p>
+          <div class="file-media" id="file-media" hidden></div>
+          <a class="dl" id="file-dl" href="#" download></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 </main>
 
-<footer>🦇 betterprivacy.app · client-side end-to-end encryption for Discord</footer>
+<footer class="site-footer"><span>🦇 BetterPrivacy</span><nav><a href="/create/" data-copy="createNav">Create a message</a><a href="/" data-copy="home">Home</a><a href="/terms/" data-copy="terms">Terms</a></nav></footer>
 
 <script>
+  // ── strings ────────────────────────────────────────────────────────────────
+  var I18N = {
+    en: {
+      'empty.title': 'Open a private message',
+      'empty.body': 'Paste a BetterPrivacy message link below, or choose an encrypted file further down.',
+      'empty.malformed': 'The link you followed carries a payload this page doesn’t recognize — it may have been truncated while copying. Ask the sender to copy the whole message.',
+      'empty.cta': 'Get the plugin — encrypt your own channels',
+      'empty.note': 'No accounts, no servers, no analytics. The encrypted payload travels in the URL fragment (the part after #), which your browser never sends to any server — including ours.',
+      'msg.title': '🦇 Encrypted message',
+      'msg.fp': 'key fingerprint',
+      'msg.phraseLabel': 'Secret phrase',
+      'msg.phrasePh': 'the phrase the sender shared with you',
+      'msg.decrypt': 'Decrypt',
+      'msg.status.idle': 'Enter the phrase the sender gave you — outside Discord, ideally.',
+      'msg.status.empty': 'The phrase is empty.',
+      'msg.status.deriving': 'Deriving the key — 600,000 rounds, takes about a second…',
+      'msg.status.mismatch': 'That phrase doesn’t fit this message (key fingerprint mismatch). Check for typos — spaces and case matter.',
+      'msg.status.auth': 'The phrase is right, but the message failed authentication — it was modified or truncated in transit.',
+      'msg.status.done': 'Decrypted locally — this plaintext exists only on your screen.',
+      'msg.status.error': 'Something went wrong while deriving the key. Try again.',
+      'msg.status.insecure': 'This browser won’t give the page its crypto — WebCrypto needs a secure origin. Open https://betterprivacy.app/m rather than a plain http:// address.',
+      'msg.copy': 'Copy plaintext',
+      'msg.copied': 'Copied ✓',
+      'msg.copyManual': 'Clipboard unavailable. The message is selected; copy it manually.',
+      'msg.getPlugin': 'Get the plugin to read these inline →',
+      'msg.note': 'Your phrase stays in this tab. The link keeps the encrypted message so you can reopen it later. Share the phrase separately.',
+      'file.title': '🦇 Decrypt a file',
+      'file.drop': 'Drop a .bpenc file here — or click to choose',
+      'file.hint': 'Encrypted attachments download from Discord as randomly-named .bpenc files. The real name is sealed inside the encryption.',
+      'file.phraseLabel': 'Secret phrase',
+      'file.phrasePh': 'the phrase this channel uses',
+      'file.decrypt': 'Decrypt',
+      'file.badMagic': 'That file isn’t a BetterPrivacy container (missing BPENC1 header).',
+      'file.mismatch': 'That phrase doesn’t fit this file (key fingerprint mismatch). Check for typos — spaces and case matter.',
+      'file.auth': 'The phrase is right, but the file failed authentication — it was modified or truncated.',
+      'file.done': 'Decrypted locally — nothing left this tab.',
+      'file.download': 'Save {filename}',
+      'footer': '🦇 betterprivacy.app · client-side end-to-end encryption for Discord',
+      'footer.terms': 'Terms'
+    },
+    tr: {
+      'empty.title': 'Özel bir mesaj aç',
+      'empty.body': 'Aldığın BetterPrivacy mesaj bağlantısını yapıştır veya aşağıdan şifreli bir dosya seç.',
+      'empty.malformed': 'Takip ettiğin bağlantı, bu sayfanın tanımadığı bir veri taşıyor — kopyalanırken kırpılmış olabilir. Gönderenden mesajın tamamını kopyalamasını iste.',
+      'empty.cta': 'Eklentiyi edin — kendi kanallarını şifrele',
+      'empty.note': 'Hesap yok, sunucu yok, analitik yok. Şifreli veri URL’nin # sonrası bölümünde taşınır; tarayıcın bu bölümü hiçbir sunucuya göndermez — bizimkiler dahil.',
+      'msg.title': '🦇 Şifreli mesaj',
+      'msg.fp': 'anahtar parmak izi',
+      'msg.phraseLabel': 'Gizli ifade',
+      'msg.phrasePh': 'gönderenin seninle paylaştığı ifade',
+      'msg.decrypt': 'Çöz',
+      'msg.status.idle': 'Gönderenin verdiği ifadeyi gir — tercihen Discord dışında paylaşılanı.',
+      'msg.status.empty': 'İfade boş.',
+      'msg.status.deriving': 'Anahtar türetiliyor — 600.000 tur, yaklaşık bir saniye…',
+      'msg.status.mismatch': 'Bu ifade bu mesaja uymuyor (anahtar parmak izi tutmadı). Yazım hatasına bak — boşluklar ve büyük/küçük harf önemli.',
+      'msg.status.auth': 'İfade doğru ama mesaj doğrulamayı geçemedi — yolda değiştirilmiş ya da kırpılmış.',
+      'msg.status.done': 'Yerelde çözüldü — bu düz metin yalnızca senin ekranında var.',
+      'msg.status.error': 'Anahtar türetilirken bir şeyler ters gitti. Tekrar dene.',
+      'msg.status.insecure': 'Bu tarayıcı sayfaya kriptoyu vermiyor — WebCrypto güvenli bir kaynak istiyor. Düz http:// adresi yerine https://betterprivacy.app/m adresini aç.',
+      'msg.copy': 'Düz metni kopyala',
+      'msg.copied': 'Kopyalandı ✓',
+      'msg.copyManual': 'Pano erişimi yok. Mesaj seçildi; elle kopyala.',
+      'msg.getPlugin': 'Bunları yerinde okumak için eklentiyi edin →',
+      'msg.note': 'İfaden bu sekmede kalır. Bağlantı şifreli mesajı taşır; sonra yeniden açabilirsin. İfadeyi ayrı paylaş.',
+      'file.title': '🦇 Dosya çöz',
+      'file.drop': '.bpenc dosyasını buraya bırak — ya da seçmek için tıkla',
+      'file.hint': 'Şifreli ekler Discord’dan rastgele adlı .bpenc dosyaları olarak iner. Gerçek ad, şifrelemenin içinde mühürlü.',
+      'file.phraseLabel': 'Gizli ifade',
+      'file.phrasePh': 'bu kanalın kullandığı ifade',
+      'file.decrypt': 'Çöz',
+      'file.badMagic': 'Bu bir BetterPrivacy kabı değil (BPENC1 başlığı yok).',
+      'file.mismatch': 'Bu ifade bu dosyaya uymuyor (anahtar parmak izi tutmadı). Yazım hatasına bak — boşluklar ve büyük/küçük harf önemli.',
+      'file.auth': 'İfade doğru ama dosya doğrulamayı geçemedi — değiştirilmiş ya da kırpılmış.',
+      'file.done': 'Yerelde çözüldü — hiçbir şey bu sekmeden çıkmadı.',
+      'file.download': 'Kaydet: {filename}',
+      'footer': '🦇 betterprivacy.app · Discord için istemci tarafı uçtan uca şifreleme',
+      'footer.terms': 'Kullanım Şartları'
+    },
+    ru: {
+      'empty.title': 'Открыть приватное сообщение',
+      'empty.body': 'Вставьте ссылку BetterPrivacy или выберите зашифрованный файл ниже.',
+      'empty.malformed': 'Ссылка несёт данные, которые страница не распознаёт — возможно, они обрезались при копировании. Попросите отправителя скопировать сообщение целиком.',
+      'empty.cta': 'Установить плагин — шифруйте свои каналы',
+      'empty.note': 'Без аккаунтов, серверов и аналитики. Зашифрованные данные едут во фрагменте URL (после #), который браузер никогда не отправляет ни на один сервер — включая наш.',
+      'msg.title': '🦇 Зашифрованное сообщение',
+      'msg.fp': 'отпечаток ключа',
+      'msg.phraseLabel': 'Секретная фраза',
+      'msg.phrasePh': 'фраза, которой поделился отправитель',
+      'msg.decrypt': 'Расшифровать',
+      'msg.status.idle': 'Введите фразу от отправителя — в идеале переданную вне Discord.',
+      'msg.status.empty': 'Фраза пуста.',
+      'msg.status.deriving': 'Вычисляем ключ — 600 000 раундов, около секунды…',
+      'msg.status.mismatch': 'Эта фраза не подходит к сообщению (отпечаток ключа не совпал). Проверьте опечатки — пробелы и регистр важны.',
+      'msg.status.auth': 'Фраза верна, но сообщение не прошло проверку подлинности — его изменили или обрезали по пути.',
+      'msg.status.done': 'Расшифровано локально — этот текст существует только на вашем экране.',
+      'msg.status.error': 'Что-то пошло не так при вычислении ключа. Попробуйте ещё раз.',
+      'msg.status.insecure': 'Браузер не даёт странице криптографию — WebCrypto требует защищённого источника. Откройте https://betterprivacy.app/m вместо обычного адреса http://.',
+      'msg.copy': 'Скопировать текст',
+      'msg.copied': 'Скопировано ✓',
+      'msg.copyManual': 'Буфер обмена недоступен. Скопируйте выделенное сообщение вручную.',
+      'msg.getPlugin': 'Поставьте плагин, чтобы читать это прямо в чате →',
+      'msg.note': 'Фраза остаётся в этой вкладке. Ссылка сохраняет зашифрованное сообщение для повторного открытия. Передайте фразу отдельно.',
+      'file.title': '🦇 Расшифровать файл',
+      'file.drop': 'Перетащите файл .bpenc сюда — или нажмите, чтобы выбрать',
+      'file.hint': 'Зашифрованные вложения скачиваются из Discord как файлы .bpenc со случайными именами. Настоящее имя запечатано внутри шифрования.',
+      'file.phraseLabel': 'Секретная фраза',
+      'file.phrasePh': 'фраза этого канала',
+      'file.decrypt': 'Расшифровать',
+      'file.badMagic': 'Это не контейнер BetterPrivacy (нет заголовка BPENC1).',
+      'file.mismatch': 'Эта фраза не подходит к файлу (отпечаток ключа не совпал). Проверьте опечатки — пробелы и регистр важны.',
+      'file.auth': 'Фраза верна, но файл не прошёл проверку подлинности — он изменён или обрезан.',
+      'file.done': 'Расшифровано локально — ничто не покинуло эту вкладку.',
+      'file.download': 'Сохранить {filename}',
+      'footer': '🦇 betterprivacy.app · сквозное шифрование для Discord на стороне клиента',
+      'footer.terms': 'Условия'
+    }
+  }
+
+  var lang = 'en'
+  function t(key) {
+    var dict = I18N[lang] || I18N.en
+    var s = dict[key]
+    if (typeof s !== 'string') s = I18N.en[key]
+    return typeof s === 'string' ? s : ''
+  }
+
+  // ── crypto ─────────────────────────────────────────────────────────────────
   // Mirrors src/crypto/* in the plugin exactly:
   // PBKDF2-HMAC-SHA256 ×600,000 over the phrase + 16-byte salt → 256-bit key.
   // keyId = first 6 bytes of SHA-256(raw key bits), b64url (8 chars).
   // AES-256-GCM, 12-byte IV. Wire fragment: #v1.<keyId>.<salt>.<iv>.<ct>
+  //
+  // crypto.subtle exists only in a SECURE context (https://, file://,
+  // localhost). Served over a plain http:// address — a LAN dev server, say —
+  // the object is simply absent and every derive() throws a bare TypeError,
+  // which would surface as "try again" and never work. Detect it once and say
+  // what is actually wrong instead.
+  var HAS_SUBTLE = typeof crypto !== 'undefined' && !!crypto.subtle
   var ITERATIONS = 600000
   var FRAG_RE = /^#v1\.([A-Za-z0-9_-]{8})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)$/
 
@@ -280,24 +310,53 @@
   var wrap = document.getElementById('wrap')
   var empty = document.getElementById('empty')
   var box = document.getElementById('box')
-  var statusEl = document.getElementById('status')
   var result = document.getElementById('result')
   var tools = document.getElementById('tools')
   var goBtn = document.getElementById('go')
   var phraseInput = document.getElementById('phrase')
   var parts = null
+  var messageGeneration = 0
+  var copyGeneration = 0
+  var copyTimer = null
 
-  function setStatus(msg, isErr) {
-    statusEl.textContent = msg
-    statusEl.classList.toggle('err', !!isErr)
+  // WebCrypto cannot be aborted: invalidate ownership before clearing the UI.
+  // Every continuation (including errors and finally) must still own its flow.
+  function clearMessage() {
+    messageGeneration++
+    copyGeneration++
+    if (copyTimer) clearTimeout(copyTimer)
+    copyTimer = null
+    document.getElementById('copy').textContent = t('msg.copy')
+    result.textContent = ''
+    result.hidden = true
+    result.classList.remove('show')
+    tools.hidden = true
+    wrap.classList.remove('lit')
+    goBtn.disabled = false
   }
 
+  // A status line remembers its KEY, so a language switch can re-render it.
+  function statusLine(el) { return { el: el, key: '', err: false } }
+  function setStatus(s, key, isErr) {
+    s.key = key || ''
+    s.err = !!isErr
+    s.el.textContent = s.key ? t(s.key) : ''
+    s.el.hidden = !s.key
+    s.el.classList.toggle('err', s.err)
+  }
+  var msgStatus = statusLine(document.getElementById('status'))
+  var fileStatus = statusLine(document.getElementById('file-status'))
+
   function boot() {
+    clearMessage()
+    parts = null
+    phraseInput.value = ''
+    setStatus(msgStatus, 'msg.status.idle')
     var m = FRAG_RE.exec(location.hash)
     if (!m) {
       empty.hidden = false
       box.hidden = true
-      document.getElementById('malformed-note').hidden = location.hash.length <= 1
+      document.getElementById('malformed-note').hidden = location.hash.length <= 1 || location.hash === '#files'
       return
     }
     parts = { keyId: m[1], salt: m[2], iv: m[3], ct: m[4] }
@@ -305,11 +364,6 @@
     box.hidden = false
     document.getElementById('fp').textContent = parts.keyId
     document.getElementById('preview').textContent = 'v1.' + parts.keyId + '.' + parts.salt + '.' + parts.iv + '.' + parts.ct
-    result.hidden = true
-    result.classList.remove('show')
-    tools.hidden = true
-    wrap.classList.remove('lit')
-    setStatus('Enter the phrase the sender gave you — outside Discord, ideally.')
     phraseInput.focus()
   }
 
@@ -317,48 +371,426 @@
     e.preventDefault()
     if (!parts) return
     var phrase = phraseInput.value
-    if (!phrase) { setStatus('The phrase is empty.', true); return }
+    var activeParts = parts
+    clearMessage()
+    var activeGeneration = messageGeneration
+    var activeHash = location.hash
+    function current() { return activeGeneration === messageGeneration && activeHash === location.hash }
+    if (!phrase) { setStatus(msgStatus, 'msg.status.empty', true); return }
+    if (!HAS_SUBTLE) { setStatus(msgStatus, 'msg.status.insecure', true); return }
     goBtn.disabled = true
-    setStatus('Deriving the key — 600,000 rounds, takes about a second…')
+    setStatus(msgStatus, 'msg.status.deriving')
     try {
-      var d = await derive(phrase, parts.salt)
-      if (d.keyId !== parts.keyId) {
-        setStatus("That phrase doesn't fit this message (key fingerprint mismatch). Check for typos — spaces and case matter.", true)
+      var d = await derive(phrase, activeParts.salt)
+      if (!current()) return
+      if (d.keyId !== activeParts.keyId) {
+        setStatus(msgStatus, 'msg.status.mismatch', true)
         return
       }
       var pt
       try {
-        var buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(parts.iv) }, d.key, b64d(parts.ct))
+        var buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(activeParts.iv) }, d.key, b64d(activeParts.ct))
         pt = new TextDecoder().decode(buf)
       } catch (_) {
-        setStatus('The phrase is right, but the message failed authentication — it was modified or truncated in transit.', true)
+        if (current()) setStatus(msgStatus, 'msg.status.auth', true)
         return
       }
+      if (!current()) return
+      phraseInput.value = ''
       result.textContent = pt // textContent: plaintext is data, never markup
       result.hidden = false
-      requestAnimationFrame(function () { result.classList.add('show') })
+      result.focus()
+      requestAnimationFrame(function () { if (current()) result.classList.add('show') })
       tools.hidden = false
       wrap.classList.add('lit')
-      setStatus('Decrypted locally — this plaintext exists only on your screen.')
+      setStatus(msgStatus, 'msg.status.done')
     } catch (err) {
-      setStatus('Something went wrong while deriving the key. Try again.', true)
+      if (current()) setStatus(msgStatus, 'msg.status.error', true)
     } finally {
-      goBtn.disabled = false
+      if (current()) goBtn.disabled = false
     }
   })
 
-  document.getElementById('copy').addEventListener('click', function () {
+  document.getElementById('copy').addEventListener('click', async function () {
     if (result.hidden) return
-    navigator.clipboard.writeText(result.textContent).then(function () {
+    var activeGeneration = messageGeneration
+    var activeHash = location.hash
+    var activeCopy = ++copyGeneration
+    function current() {
+      return activeGeneration === messageGeneration && activeHash === location.hash &&
+        activeCopy === copyGeneration && !result.hidden
+    }
+    try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable')
+      await navigator.clipboard.writeText(result.textContent)
+      if (!current()) return
       var btn = document.getElementById('copy')
-      btn.textContent = 'Copied ✓'
-      setTimeout(function () { btn.textContent = 'Copy plaintext' }, 1500)
-    })
+      btn.textContent = t('msg.copied')
+      if (copyTimer) clearTimeout(copyTimer)
+      copyTimer = setTimeout(function () { copyTimer = null; btn.textContent = t('msg.copy') }, 1500)
+    } catch (_) {
+      if (!current()) return
+      result.focus()
+      var selection = window.getSelection()
+      if (!selection) return
+      var range = document.createRange()
+      range.selectNodeContents(result)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      setStatus(msgStatus, 'msg.copyManual')
+    }
   })
 
+  document.getElementById('show-reader-phrase').addEventListener('click', function () {
+    var visible = phraseInput.type === 'password'
+    phraseInput.type = visible ? 'text' : 'password'
+    this.setAttribute('aria-pressed', String(visible))
+    this.setAttribute('data-copy', visible ? 'hidePhrase' : 'showPhrase')
+    if (window.BPUI) BPUI.refresh()
+  })
+  document.getElementById('forget-message').addEventListener('click', function () {
+    clearMessage()
+    phraseInput.value = ''
+    setStatus(msgStatus, 'msg.status.idle')
+    phraseInput.focus()
+  })
+
+  document.getElementById('paste-form').addEventListener('submit', function (e) {
+    e.preventDefault()
+    var input = document.getElementById('paste-link').value.trim()
+    var match = /^(?:🦇)?<?(https:\/\/betterprivacy\.app\/m\/?#v1\.[A-Za-z0-9_.-]+)>?$/.exec(input)
+    var valid = match && (input.includes('<') === input.includes('>')) && FRAG_RE.test(new URL(match[1]).hash)
+    if (!valid) {
+      var error = document.getElementById('paste-status')
+      error.setAttribute('data-copy', 'pasteInvalid')
+      error.textContent = window.BPUI ? BPUI.text('pasteInvalid') : 'Paste a complete BetterPrivacy link, including the part after #.'
+      return
+    }
+    var nextHash = new URL(match[1]).hash
+    if (location.hash === nextHash) boot()
+    else location.hash = nextHash
+  })
   window.addEventListener('hashchange', boot)
   boot()
+
+  // ── .bpenc container ───────────────────────────────────────────────────────
+  // bytes 0–5 magic "BPENC1" · 6–13 keyId · 14–29 KDF salt · 30–41 header IV
+  // 42–45 uint32 BE header length · then AES-GCM(header JSON) · then data chunks.
+  // Chunk i uses the header IV with (1 + i) added as a BE counter on the last
+  // 4 bytes; each chunk carries its own 16-byte GCM tag. Mirrors src/crypto/bpenc.ts.
+  var CHUNK_SIZE = 8 * 1024 * 1024
+  var GCM_TAG_LEN = 16
+  var MAGIC = 'BPENC1'
+  var FIXED_PREFIX = 46
+
+  function ivPlus(iv, n) {
+    var out = new Uint8Array(12)
+    out.set(iv)
+    var view = new DataView(out.buffer)
+    view.setUint32(8, (view.getUint32(8) + n) >>> 0)
+    return out
+  }
+  function toHex(bytes) {
+    var out = ''
+    for (var i = 0; i < bytes.length; i++) {
+      var h = bytes[i].toString(16)
+      out += h.length < 2 ? '0' + h : h
+    }
+    return out
+  }
+  async function sha256Hex(bytes) {
+    return toHex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)))
+  }
+
+  /** magic + keyId + salt + header IV + header length, or null when it isn't a container. */
+  function parseContainer(bytes) {
+    if (bytes.length < FIXED_PREFIX) return null
+    for (var i = 0; i < MAGIC.length; i++) {
+      if (bytes[i] !== MAGIC.charCodeAt(i)) return null
+    }
+    var keyId = ''
+    for (var j = 6; j < 14; j++) keyId += String.fromCharCode(bytes[j])
+    if (!/^[A-Za-z0-9_-]{8}$/.test(keyId)) return null
+    var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    return {
+      bytes: bytes,
+      keyId: keyId,
+      saltB64: b64e(bytes.subarray(14, 30)),
+      headerIv: bytes.subarray(30, 42),
+      headerLen: view.getUint32(42)
+    }
+  }
+
+  /** Throws on truncation, GCM auth failure, a forged header, or a sha256 mismatch. */
+  async function decryptContainer(key, c) {
+    var bytes = c.bytes
+    if (bytes.length < FIXED_PREFIX + c.headerLen) throw new Error('BP_TRUNCATED')
+
+    var headerPlain = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: c.headerIv }, key,
+      bytes.subarray(FIXED_PREFIX, FIXED_PREFIX + c.headerLen))
+
+    var header
+    try {
+      header = JSON.parse(new TextDecoder().decode(headerPlain))
+    } catch (_) {
+      throw new Error('BP_BAD_HEADER')
+    }
+    if (!header || typeof header !== 'object' ||
+        typeof header.filename !== 'string' ||
+        typeof header.mime !== 'string' ||
+        typeof header.sha256 !== 'string' ||
+        typeof header.size !== 'number' ||
+        typeof header.chunks !== 'number' ||
+        !isFinite(header.size) || header.size < 0 || header.size !== Math.floor(header.size) ||
+        header.chunks !== Math.ceil(header.size / CHUNK_SIZE) ||
+        // Ciphertext is never smaller than plaintext (chunks only add tags), so a
+        // size past the remaining bytes is forged — reject before allocating.
+        header.size > bytes.length - FIXED_PREFIX - c.headerLen) {
+      throw new Error('BP_BAD_HEADER')
+    }
+
+    var data = new Uint8Array(header.size)
+    var readOff = FIXED_PREFIX + c.headerLen
+    var writeOff = 0
+    for (var i = 0; i < header.chunks; i++) {
+      var plainLen = Math.min(CHUNK_SIZE, header.size - writeOff)
+      var encLen = plainLen + GCM_TAG_LEN
+      if (bytes.length < readOff + encLen) throw new Error('BP_TRUNCATED')
+      var plain = new Uint8Array(await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: ivPlus(c.headerIv, 1 + i) }, key,
+        bytes.subarray(readOff, readOff + encLen)))
+      data.set(plain, writeOff)
+      writeOff += plain.length
+      readOff += encLen
+    }
+    if (readOff !== bytes.length) throw new Error('BP_TRAILING_DATA')
+    if ((await sha256Hex(data)) !== header.sha256) throw new Error('BP_SHA256_MISMATCH')
+    return { header: header, data: data }
+  }
+
+  // ── file card ──────────────────────────────────────────────────────────────
+  var fwrap = document.getElementById('fwrap')
+  var drop = document.getElementById('drop')
+  var dropText = document.getElementById('drop-text')
+  var fileInput = document.getElementById('file-input')
+  var fileUnlock = document.getElementById('file-unlock')
+  var fileForm = document.getElementById('file-form')
+  var fPhrase = document.getElementById('fphrase')
+  var fgo = document.getElementById('fgo')
+  var fileResult = document.getElementById('file-result')
+  var fileMeta = document.getElementById('file-meta')
+  var fileMedia = document.getElementById('file-media')
+  var fileDl = document.getElementById('file-dl')
+
+  var container = null   // parsed .bpenc currently loaded
+  var fileGeneration = 0
+  var dropMono = null    // mono summary line shown in place of the drop prompt
+  var blobUrl = null     // last object URL, revoked before a new one
+  var savedName = ''     // decrypted filename, for re-rendering the download label
+
+  function humanSize(n) {
+    if (n < 1024) return n + ' B'
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB'
+    return (n / (1024 * 1024)).toFixed(1) + ' MB'
+  }
+  function safeMime(mime) {
+    return /^[A-Za-z0-9][A-Za-z0-9.+-]*\/[A-Za-z0-9][A-Za-z0-9.+-]*$/.test(mime) ? mime : 'application/octet-stream'
+  }
+  function renderDownload() {
+    if (!savedName) return
+    fileDl.textContent = t('file.download').split('{filename}').join(savedName)
+  }
+  function clearResult() {
+    fileResult.hidden = true
+    fileMedia.hidden = true
+    while (fileMedia.firstChild) fileMedia.removeChild(fileMedia.firstChild)
+    fwrap.classList.remove('lit')
+    savedName = ''
+    fileMeta.textContent = ''
+    fileDl.removeAttribute('href')
+    fileDl.removeAttribute('download')
+    fileDl.textContent = ''
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = null }
+  }
+  function setDropLine(text) {
+    dropMono = text
+    dropText.textContent = text === null ? t('file.drop') : text
+  }
+
+  async function loadFile(file) {
+    if (!file) return
+    var activeGeneration = ++fileGeneration
+    clearResult()
+    container = null
+    fgo.disabled = false
+    fPhrase.value = ''
+    fileUnlock.hidden = true
+    setDropLine(null)
+    setStatus(fileStatus, '')
+    var bytes
+    try {
+      bytes = new Uint8Array(await file.arrayBuffer())
+    } catch (_) {
+      if (activeGeneration !== fileGeneration) return
+      fileUnlock.hidden = true
+      setDropLine(null)
+      setStatus(fileStatus, 'file.badMagic', true)
+      return
+    }
+    if (activeGeneration !== fileGeneration) return
+    var c = parseContainer(bytes)
+    if (!c) {
+      fileUnlock.hidden = true
+      setDropLine(null)
+      setStatus(fileStatus, 'file.badMagic', true)
+      return
+    }
+    container = c
+    setDropLine('BPENC1 · key ' + c.keyId + ' · ' + humanSize(bytes.length))
+    fileUnlock.hidden = false
+    setStatus(fileStatus, '')
+    fPhrase.focus()
+  }
+
+  drop.addEventListener('click', function () { fileInput.click() })
+  drop.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click() }
+  })
+  drop.addEventListener('dragover', function (e) {
+    e.preventDefault()
+    drop.classList.add('over')
+  })
+  drop.addEventListener('dragleave', function () { drop.classList.remove('over') })
+  drop.addEventListener('drop', function (e) {
+    e.preventDefault()
+    drop.classList.remove('over')
+    var dt = e.dataTransfer
+    if (dt && dt.files && dt.files[0]) loadFile(dt.files[0])
+  })
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files && fileInput.files[0]) loadFile(fileInput.files[0])
+    fileInput.value = ''
+  })
+
+  fileForm.addEventListener('submit', async function (e) {
+    e.preventDefault()
+    if (!container) return
+    var phrase = fPhrase.value
+    var activeContainer = container
+    var activeGeneration = ++fileGeneration
+    function current() { return activeGeneration === fileGeneration }
+    clearResult()
+    fgo.disabled = false
+    if (!phrase) { setStatus(fileStatus, 'msg.status.empty', true); return }
+    if (!HAS_SUBTLE) { setStatus(fileStatus, 'msg.status.insecure', true); return }
+    fgo.disabled = true
+    setStatus(fileStatus, 'msg.status.deriving')
+    try {
+      var d = await derive(phrase, activeContainer.saltB64)
+      if (!current()) return
+      if (d.keyId !== activeContainer.keyId) {
+        setStatus(fileStatus, 'file.mismatch', true)
+        return
+      }
+      var out
+      try {
+        out = await decryptContainer(d.key, activeContainer)
+      } catch (_) {
+        if (current()) setStatus(fileStatus, 'file.auth', true)
+        return
+      }
+      if (!current()) return
+
+      clearResult()
+      fPhrase.value = ''
+      var mime = safeMime(out.header.mime)
+      blobUrl = URL.createObjectURL(new Blob([out.data], { type: mime }))
+      savedName = out.header.filename
+
+      // textContent / setAttribute only — the header is data, never markup.
+      fileMeta.textContent = savedName + ' · ' + humanSize(out.header.size)
+
+      var media = null
+      if (mime.indexOf('image/') === 0) { media = document.createElement('img'); media.alt = '' }
+      else if (mime.indexOf('video/') === 0) { media = document.createElement('video'); media.controls = true; media.setAttribute('playsinline', '') }
+      else if (mime.indexOf('audio/') === 0) { media = document.createElement('audio'); media.controls = true }
+      if (media) {
+        media.src = blobUrl
+        fileMedia.appendChild(media)
+        fileMedia.hidden = false
+      }
+
+      fileDl.setAttribute('download', savedName)
+      fileDl.setAttribute('href', blobUrl)
+      renderDownload()
+
+      fileResult.hidden = false
+      fwrap.classList.add('lit')
+      setStatus(fileStatus, 'file.done')
+    } catch (err) {
+      if (current()) {
+        clearResult()
+        setStatus(fileStatus, 'msg.status.error', true)
+      }
+    } finally {
+      if (current()) fgo.disabled = false
+    }
+  })
+
+  window.addEventListener('pagehide', function () {
+    clearMessage()
+    phraseInput.value = ''
+    setStatus(msgStatus, 'msg.status.idle')
+    fileGeneration++
+    fPhrase.value = ''
+    fgo.disabled = false
+    setStatus(fileStatus, '')
+    clearResult()
+  })
+
+  // ── language ───────────────────────────────────────────────────────────────
+  function applyLang(code) {
+    if (!I18N[code]) code = 'en'
+    lang = code
+    document.documentElement.lang = code
+    try { localStorage.setItem('bp-lang', code) } catch (_) {}
+
+    var nodes = document.querySelectorAll('[data-i18n]')
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'))
+    var phs = document.querySelectorAll('[data-i18n-ph]')
+    for (var j = 0; j < phs.length; j++) phs[j].setAttribute('placeholder', t(phs[j].getAttribute('data-i18n-ph')))
+
+    var btns = document.querySelectorAll('#langs button')
+    for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('on', btns[k].getAttribute('data-lang') === code)
+
+    // Re-render everything composed in JS: status lines keep their key, the
+    // drop zone keeps its mono summary, the download button its filename.
+    setStatus(msgStatus, msgStatus.key, msgStatus.err)
+    setStatus(fileStatus, fileStatus.key, fileStatus.err)
+    if (dropMono !== null) dropText.textContent = dropMono
+    if (copyTimer) document.getElementById('copy').textContent = t('msg.copied')
+    renderDownload()
+  }
+
+  function initialLang() {
+    var saved = null
+    try { saved = localStorage.getItem('bp-lang') } catch (_) {}
+    if (saved && I18N[saved]) return saved
+    var nav = (navigator.language || '').toLowerCase()
+    if (/^tr/.test(nav)) return 'tr'
+    if (/^ru/.test(nav)) return 'ru'
+    return 'en'
+  }
+
+  document.getElementById('langs').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('button[data-lang]') : null
+    if (btn) applyLang(btn.getAttribute('data-lang'))
+  })
+
+  applyLang(initialLang())
 </script>
 
+<script src="/assets/site.js"></script>
 </body>
 </html>

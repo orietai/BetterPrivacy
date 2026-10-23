@@ -1,5 +1,6 @@
 # build output — releases attach dist/BetterPrivacy.plugin.js
 dist/
+site/BetterPrivacy.plugin.js
 
 # dependencies
 node_modules/

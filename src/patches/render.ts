@@ -22,6 +22,7 @@ import type { CacheEntry, KeyEntry, PluginContext, WireParts } from '../types'
 import { decryptText } from '../crypto/cipher'
 import { parseWire } from '../crypto/wire'
 import { openRecoverKeyModal, openUnlockModal } from '../ui/UnlockModal'
+import { t } from '../i18n'
 
 /** Keep in sync with RERENDER_EVENT in index.ts (not exported from there). */
 const RERENDER_EVENT = 'bp-rerender'
@@ -97,18 +98,17 @@ function EncryptedContent(props: EncryptedContentProps): any {
   }
 
   // Cache miss with an unlocked key: decrypt asynchronously, then re-render.
-  // Deps are presence booleans so the rerender-event bumps don't re-kick an
-  // in-flight decrypt. modeOn must be a dep: the effect early-returns while
+  // Key identity is a dependency so a re-unlock replaces cancelled work.
+  // modeOn must be a dep: the effect early-returns while
   // the mode is off, so toggling it back ON has to re-run the effect or the
   // message sticks on "Decrypting…" until remount.
   const cachedPresent = cached !== undefined
-  const keyPresent = key !== null
   React.useEffect(() => {
     if (!modeOn || cachedPresent || !key) return
     let cancelled = false
     decryptText(key, parts.iv, parts.ciphertext).then(
       (text: string) => {
-        if (cancelled) return
+        if (cancelled || ctx.session.getKey(parts.keyId) !== key) return
         try {
           ctx.cache.set(cacheKey, { kind: 'text', text, keyId: parts.keyId })
         } catch {
@@ -120,7 +120,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
       () => {
         // GCM auth failure (tampered ciphertext or wrong key) — cache it so we
         // don't retry on every render (CacheEntry kind 'failed').
-        if (cancelled) return
+        if (cancelled || ctx.session.getKey(parts.keyId) !== key) return
         try {
           ctx.cache.set(cacheKey, { kind: 'failed', keyId: parts.keyId })
         } catch {
@@ -132,7 +132,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
     return () => {
       cancelled = true
     }
-  }, [cacheKey, cachedPresent, keyPresent, modeOn])
+  }, [cacheKey, cachedPresent, key, modeOn, parts.iv, parts.ciphertext])
 
   // ---- Render states (spec §6 steps 1–5) -----------------------------------
 
@@ -146,7 +146,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
         className: 'bp-chip bp-chip-locked',
         role: 'button',
         tabIndex: 0,
-        title: 'Encryption mode is off for this channel',
+        title: t('chip.modeOffTitle'),
         onClick: () => {
           try {
             if (props.channelId) {
@@ -158,7 +158,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
           }
         },
       },
-      '🔒 Encrypted message — encryption off for this channel (click to enable)',
+      t('chip.modeOff'),
     )
   }
 
@@ -167,7 +167,10 @@ function EncryptedContent(props: EncryptedContentProps): any {
   if (cached?.kind === 'text') {
     return React.createElement(
       'span',
-      { className: 'bp-decrypted', title: entry ? `Encrypted with "${entry.label}"` : undefined },
+      {
+        className: 'bp-decrypted',
+        title: entry ? t('chip.encryptedWith', { label: entry.label }) : undefined,
+      },
       renderMarkdown(ctx, cached.text, props.channelId),
     )
   }
@@ -177,7 +180,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
     return React.createElement(
       'span',
       { className: 'bp-failed' },
-      '⚠ Decryption failed (tampered or wrong key)',
+      t('chip.failed'),
     )
   }
 
@@ -191,18 +194,19 @@ function EncryptedContent(props: EncryptedContentProps): any {
         className: 'bp-chip bp-chip-unknown',
         role: 'button',
         tabIndex: 0,
-        title: 'Click to recover with label + passphrase · Alt-click to view ciphertext',
+        title: t('chip.unknownTitle'),
         onClick: (e: any) => {
           if (e?.altKey) {
             setExpanded((v: boolean) => !v)
             return
           }
-          openRecoverKeyModal(ctx, parts.keyId, props.channelId ?? null).catch(() => {
+          openRecoverKeyModal(ctx, parts, props.channelId ?? null,
+            (key) => decryptText(key, parts.iv, parts.ciphertext)).catch(() => {
             // Modal failed to open/resolve — chip stays, user can retry.
           })
         },
       },
-      expanded ? props.rawContent : `🔒 Encrypted message (unknown key ${parts.keyId}) — click to recover`,
+      expanded ? props.rawContent : t('chip.unknown', { keyId: parts.keyId }),
     )
   }
 
@@ -224,12 +228,12 @@ function EncryptedContent(props: EncryptedContentProps): any {
             })
         },
       },
-      `🔒 Encrypted message (key: ${entry.label}) — click to unlock`,
+      t('chip.locked', { label: entry.label }),
     )
   }
 
   // Unlocked, decryption in flight (effect above will bump when done).
-  return React.createElement('span', { className: 'bp-chip' }, '🔒 Decrypting…')
+  return React.createElement('span', { className: 'bp-chip' }, t('chip.decrypting'))
 }
 
 export function applyRenderPatch(ctx: PluginContext): void {

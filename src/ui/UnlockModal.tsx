@@ -15,6 +15,7 @@
 
 import type { KeyEntry, PluginContext, Scope } from '../types'
 import { channelKeyLabel, friendlyKeyLabel } from './labels'
+import { t } from '../i18n'
 
 /**
  * Best-effort "press Enter to confirm": click the modal's primary action so
@@ -44,17 +45,23 @@ function UnlockContent(props: {
 }): JSX.Element {
   const { useState } = BdApi.React
   const [val, setVal] = useState('')
+  // The sentence wraps the label in <strong>, so the translated template is
+  // split on its {label} placeholder instead of going through t()'s
+  // substitution (all three locales keep the placeholder literal).
+  const [pre, post] = t('um.enterPhraseFor').split('{label}')
   return (
     <div>
       <div style={{ color: 'var(--text-normal, #dbdee1)', marginBottom: 4 }}>
-        Enter the secret phrase for <strong>{friendlyKeyLabel(props.entry)}</strong>{' '}
+        {pre}
+        <strong>{friendlyKeyLabel(props.entry)}</strong>
+        {post}{' '}
         <code style={{ fontSize: 12, opacity: 0.7 }}>{props.entry.id}</code>
       </div>
       <input
         className="bp-modal-input"
         type="password"
         autoFocus
-        placeholder="Passphrase"
+        placeholder={t('um.passphrasePh')}
         value={val}
         onChange={(e: any) => {
           setVal(e.target.value)
@@ -99,10 +106,10 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
         .unlock(entry, passRef.value)
         .then((ok) => {
           if (ok) {
-            BdApi.UI.showToast(`BetterPrivacy: unlocked "${entry.label}"`, { type: 'success' })
+            BdApi.UI.showToast(t('um.unlocked', { label: entry.label }), { type: 'success' })
             settle(true)
           } else {
-            BdApi.UI.showToast('Wrong passphrase', { type: 'error' })
+            BdApi.UI.showToast(t('um.wrongPassphrase'), { type: 'error' })
             // Also settle when the modal was closed mid-unlock (`closed`):
             // with the Enter fallback the modal normally stays open for a
             // retry, but once it's gone nothing else can ever settle and an
@@ -111,7 +118,7 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
           }
         })
         .catch(() => {
-          BdApi.UI.showToast('Wrong passphrase', { type: 'error' })
+          BdApi.UI.showToast(t('um.wrongPassphrase'), { type: 'error' })
           if (fromConfirm || closed) settle(false)
         })
         .then(() => {
@@ -125,22 +132,22 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
     }
 
     BdApi.UI.showConfirmationModal(
-      '🦇 Unlock key',
+      t('um.title'),
       <UnlockContent entry={entry} passRef={passRef} onEnter={onEnter} />,
       {
-        confirmText: 'Unlock',
-        cancelText: 'Cancel',
+        confirmText: t('common.unlock'),
+        cancelText: t('common.cancel'),
         onConfirm: () => {
           confirming = true
           attemptUnlock(true)
         },
-        onCancel: () => settle(false),
+        onCancel: () => { ctx.session.lockKey(entry.id); settle(false) },
         // Fires on any close (Escape, backdrop). When closing via confirm the
         // async unlock is still in flight — don't settle(false) underneath it
         // (`closed` lets that in-flight attempt settle on failure instead).
         onCloseCallback: () => {
           closed = true
-          if (!confirming && !unlocking) settle(false)
+          if (!confirming) { ctx.session.lockKey(entry.id); settle(false) }
         },
       },
     )
@@ -168,7 +175,7 @@ function PhraseContent(props: {
         className="bp-modal-input"
         type="password"
         autoFocus
-        placeholder="Secret phrase"
+        placeholder={t('pm.secretPhrasePh')}
         value={val}
         onChange={(e: any) => {
           setVal(e.target.value)
@@ -182,10 +189,7 @@ function PhraseContent(props: {
           }
         }}
       />
-      <div className="bp-hint">
-        Anyone in this channel who enters the same phrase can read the messages. Share it outside
-        Discord.
-      </div>
+      <div className="bp-hint">{t('pm.hint')}</div>
     </div>
   )
 }
@@ -194,6 +198,10 @@ export function openChannelPhraseModal(
   ctx: PluginContext,
   channelId: string,
 ): Promise<KeyEntry | null> {
+  if (ctx.modules.failed.some((failure) => /send|MessageActions|upload|CloudUpload/i.test(failure))) {
+    BdApi.UI.showToast(t('bar.broken'), { type: 'error' })
+    return Promise.resolve(null)
+  }
   return new Promise<KeyEntry | null>((resolve) => {
     let settled = false
     let confirming = false
@@ -208,24 +216,23 @@ export function openChannelPhraseModal(
     const submit = (): void => {
       if (settled) return
       if (!passRef.value) {
-        BdApi.UI.showToast('A secret phrase is required', { type: 'error' })
+        BdApi.UI.showToast(t('pm.phraseRequired'), { type: 'error' })
         settle(null)
         return
       }
+      const revision = ctx.session.revision
       void (async () => {
         try {
           const entry = await ctx.keyring.create(channelKeyLabel(channelId), passRef.value, channelId)
-          await ctx.session.unlock(entry, passRef.value)
+          if (ctx.session.revision !== revision) { settle(null); return }
+          if (!(await ctx.session.unlock(entry, passRef.value))) throw new Error(t('pm.setupFailed'))
           ctx.keyring.setActiveSendKey(channelId, entry.id)
           ctx.keyring.setEncryptMode(channelId, true)
-          BdApi.UI.showToast(
-            '🦇 Channel encrypted — share the phrase with the people who should read it',
-            { type: 'success' },
-          )
+          BdApi.UI.showToast(t('pm.channelEncrypted'), { type: 'success' })
           ctx.forceRerender()
           settle(entry)
         } catch (err: any) {
-          BdApi.UI.showToast(err?.message ?? 'Could not set up encryption', { type: 'error' })
+          BdApi.UI.showToast(err?.message ?? t('pm.setupFailed'), { type: 'error' })
           settle(null)
         }
       })()
@@ -239,15 +246,11 @@ export function openChannelPhraseModal(
     }
 
     BdApi.UI.showConfirmationModal(
-      '🦇 Encrypt this channel',
-      <PhraseContent
-        prompt="Pick a secret phrase for this channel. Your messages here will be encrypted with it."
-        passRef={passRef}
-        onEnter={onEnter}
-      />,
+      t('pm.title'),
+      <PhraseContent prompt={t('pm.prompt')} passRef={passRef} onEnter={onEnter} />,
       {
-        confirmText: 'Encrypt',
-        cancelText: 'Cancel',
+        confirmText: t('common.encrypt'),
+        cancelText: t('common.cancel'),
         onConfirm: () => {
           confirming = true
           submit()
@@ -291,12 +294,12 @@ function CreateKeyContent(props: {
 
   return (
     <div>
-      <label className="bp-modal-label">Label</label>
+      <label className="bp-modal-label">{t('ck.labelLabel')}</label>
       <input
         className="bp-modal-input"
         type="text"
         autoFocus
-        placeholder="e.g. team-chat"
+        placeholder={t('ck.labelPh')}
         value={label}
         onChange={(e: any) => {
           setLabel(e.target.value)
@@ -304,11 +307,11 @@ function CreateKeyContent(props: {
         }}
         onKeyDown={onKeyDown}
       />
-      <label className="bp-modal-label">Passphrase</label>
+      <label className="bp-modal-label">{t('ck.passLabel')}</label>
       <input
         className="bp-modal-input"
         type="password"
-        placeholder="Shared out-of-band with your peers"
+        placeholder={t('ck.passPh')}
         value={pass}
         onChange={(e: any) => {
           setPass(e.target.value)
@@ -336,7 +339,7 @@ function CreateKeyContent(props: {
               props.state.channelOnly = e.target.checked
             }}
           />
-          Only this channel
+          {t('ck.onlyThisChannel')}
         </label>
       ) : null}
     </div>
@@ -344,20 +347,14 @@ function CreateKeyContent(props: {
 }
 
 /**
- * Recover-key modal for "unknown key" messages: since keys derive
- * deterministically from label + passphrase (kdf.deriveSaltFromLabel), typing
- * the original pair re-derives the exact key. The derived keyId is checked
- * against the message's keyId — on match the key is added to the keyring AND
- * unlocked; on mismatch nothing is kept. Resolves true once the message can
- * decrypt.
- *
- * NOTE: pre-0.2 keys used random salts; if the original keyring entry (its
- * salt) is gone, those messages cannot be recovered by any label/passphrase.
+ * Recover from the salt advertised by a v1 message or container. The payload
+ * is authenticated before the keyring is changed. Resolves after unlocking.
  */
 export function openRecoverKeyModal(
   ctx: PluginContext,
-  expectedKeyId: string,
+  metadata: { keyId: string; salt: string },
   channelId: string | null = null,
+  authenticate: (key: CryptoKey) => Promise<unknown>,
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
@@ -373,47 +370,30 @@ export function openRecoverKeyModal(
     const recover = (): void => {
       if (settled) return
       if (!passRef.value) {
-        BdApi.UI.showToast('A secret phrase is required', { type: 'error' })
+        BdApi.UI.showToast(t('pm.phraseRequired'), { type: 'error' })
         settle(false)
         return
       }
-      // v1 flow: the label is the channel's synthetic one — the user only ever
-      // knows the phrase. Custom-labeled keys are recovered via Settings →
-      // Key Manager (create/import with the explicit label) instead.
-      const label = channelId ? channelKeyLabel(channelId) : null
-      if (!label) {
-        BdApi.UI.showToast(
-          'BetterPrivacy: cannot determine this message’s channel — recover via Settings → Key Manager',
-          { type: 'error' },
-        )
-        settle(false)
-        return
-      }
-      const preexisting = new Set(ctx.keyring.list().map((e) => e.id))
+      // v1 carries the actual salt: use it for web-created, shared and channel
+      // keys alike. The label is only local metadata, never a KDF input here.
+      const label = channelId ? channelKeyLabel(channelId) : `message:${metadata.keyId}`
+      const revision = ctx.session.revision
       void ctx.keyring
-        .create(label, passRef.value, channelId as string)
+        .recover(label, passRef.value, metadata, channelId ?? 'global', async (key) => {
+          await authenticate(key)
+          if (ctx.session.revision !== revision) throw new Error('BP_RECOVERY_CANCELLED')
+        })
         .then(async (entry) => {
-          if (entry.id !== expectedKeyId) {
-            // Wrong phrase (or the message used a custom-labeled key) — don't
-            // keep a key the user didn't mean to create (unless it already
-            // existed independently).
-            if (!preexisting.has(entry.id)) ctx.keyring.remove(entry.id)
-            BdApi.UI.showToast(
-              'That phrase doesn’t match this message. If it was sent with a custom key, add that key in Settings → Key Manager.',
-              { type: 'error' },
-            )
-            settle(false)
-            return
-          }
+          if (ctx.session.revision !== revision) { settle(false); return }
           const unlocked = await ctx.session.unlock(entry, passRef.value)
           if (unlocked) {
-            BdApi.UI.showToast('🦇 Phrase accepted — messages unlocked', { type: 'success' })
+            BdApi.UI.showToast(t('rm.accepted'), { type: 'success' })
             ctx.forceRerender()
           }
           settle(unlocked)
         })
-        .catch((err: any) => {
-          BdApi.UI.showToast(err?.message ?? 'Key recovery failed', { type: 'error' })
+        .catch(() => {
+          BdApi.UI.showToast(t('rm.wrongPhrase'), { type: 'error' })
           settle(false)
         })
     }
@@ -426,15 +406,11 @@ export function openRecoverKeyModal(
     }
 
     BdApi.UI.showConfirmationModal(
-      '🦇 Unlock encrypted message',
-      <PhraseContent
-        prompt="Enter the secret phrase this channel uses."
-        passRef={passRef}
-        onEnter={onEnter}
-      />,
+      t('rm.title'),
+      <PhraseContent prompt={t('rm.prompt')} passRef={passRef} onEnter={onEnter} />,
       {
-        confirmText: 'Unlock',
-        cancelText: 'Cancel',
+        confirmText: t('common.unlock'),
+        cancelText: t('common.cancel'),
         onConfirm: () => {
           confirming = true
           recover()
@@ -473,12 +449,12 @@ export function openCreateKeyModal(
       if (settled) return
       const label = state.label.trim()
       if (!label) {
-        BdApi.UI.showToast('A key label is required', { type: 'error' })
+        BdApi.UI.showToast(t('ck.labelRequired'), { type: 'error' })
         settle(null)
         return
       }
       if (!state.passphrase) {
-        BdApi.UI.showToast('A passphrase is required', { type: 'error' })
+        BdApi.UI.showToast(t('ck.passRequired'), { type: 'error' })
         settle(null)
         return
       }
@@ -496,15 +472,15 @@ export function openCreateKeyModal(
           }
           BdApi.UI.showToast(
             unlocked
-              ? `BetterPrivacy: key "${entry.label}" ready (created & unlocked)`
-              : `BetterPrivacy: key "${entry.label}" created (${entry.id})`,
+              ? t('ck.ready', { label: entry.label })
+              : t('ck.created', { label: entry.label, id: entry.id }),
             { type: 'success' },
           )
           ctx.forceRerender()
           settle(entry)
         })
         .catch((err: any) => {
-          BdApi.UI.showToast(err?.message ?? 'Key creation failed', { type: 'error' })
+          BdApi.UI.showToast(err?.message ?? t('ck.createFailed'), { type: 'error' })
           settle(null)
         })
     }
@@ -517,11 +493,11 @@ export function openCreateKeyModal(
     }
 
     BdApi.UI.showConfirmationModal(
-      '🦇 New key',
+      t('ck.title'),
       <CreateKeyContent state={state} channelId={channelId} onEnter={onEnter} />,
       {
-        confirmText: 'Create',
-        cancelText: 'Cancel',
+        confirmText: t('common.create'),
+        cancelText: t('common.cancel'),
         onConfirm: () => {
           confirming = true
           create()

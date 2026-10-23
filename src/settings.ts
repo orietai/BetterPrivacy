@@ -10,7 +10,7 @@
 import { PLUGIN_NAME, type SettingsData, type SettingsStore } from './types'
 
 export const DEFAULT_SETTINGS: SettingsData = {
-  // UX decision (0.2): OFF by default — relocking every channel switch forces
+  // OFF by default — relocking every channel switch forces
   // constant passphrase re-entry, which is the paranoid opt-in mode, not the
   // default. The 3 h inactivity timeout remains the default safety net.
   lockdown: false,
@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   maxAutoDownloadBytes: 25 * 1024 * 1024,
   memoryBudgetMB: 200,
   clientLinkPreviews: false,
+  language: 'auto',
 }
 
 const DATA_KEY = 'settings'
@@ -63,6 +64,9 @@ function sanitize(base: SettingsData, raw: unknown): SettingsData {
   }
   if (typeof r['clientLinkPreviews'] === 'boolean') {
     out.clientLinkPreviews = r['clientLinkPreviews']
+  }
+  if (r['language'] === 'auto' || r['language'] === 'en' || r['language'] === 'tr' || r['language'] === 'ru') {
+    out.language = r['language']
   }
   return out
 }

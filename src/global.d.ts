@@ -47,8 +47,8 @@ declare const BdApi: {
     close?(): void
   }
   Components?: any
-  /** Main-process fetch (no renderer CORS restrictions). BD ≥ 1.10. */
-  Net?: {
+  /** Required main-process fetch (no renderer CORS restrictions). */
+  Net: {
     fetch(url: string, options?: any): Promise<{
       ok: boolean
       status: number

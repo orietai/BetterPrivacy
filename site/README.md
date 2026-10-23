@@ -1,56 +1,100 @@
-# betterprivacy.app — landing page
+# betterprivacy.app
 
-Static, single-file site (`index.html`). No build step, no JS dependencies.
-The only external request is Google Fonts (Geist / Geist Mono) — self-host the
-two font files later if we want the page fully origin-contained.
+Static website and browser message tools. Serve `site/` as the web root;
+there is no frontend framework or backend.
 
-## Preview
+## Preview and prepare
 
-```bash
-open site/index.html
+```sh
+npm run build:site
+python3 -m http.server 4173 --directory site --bind 127.0.0.1
 ```
 
-## Deploy
+Open http://localhost:4173. Use localhost or HTTPS: WebCrypto is unavailable
+on an ordinary HTTP LAN address. Open through a local server rather than
+`file://`, because shared assets use root-relative paths.
 
-Any static host (Cloudflare Pages, GitHub Pages, Netlify, plain nginx):
+`build:site` builds the plugin and copies it to
+`site/BetterPrivacy.plugin.js` for the download button. That generated file
+is ignored by Git.
 
-1. Serve this `site/` directory as the web root.
-2. Copy the built plugin next to it so the download link resolves:
+## Routes
 
-   ```bash
-   npm run build
-   cp dist/BetterPrivacy.plugin.js site/BetterPrivacy.plugin.js
-   ```
+| Route | Purpose |
+| --- | --- |
+| `/` | Introduction, interactive illustration, web/plugin paths, installation and FAQ |
+| `/create/` | Write text, choose a phrase, encrypt and copy/share a message link |
+| `/m#v1.…` | Existing public message links: enter a phrase and open |
+| `/m/` | Paste a received link, or choose a local `.bpenc` file |
+| `/terms/` | Existing translated terms |
 
-   The install section and both CTAs link to `/BetterPrivacy.plugin.js`
-   (same-origin download).
-3. Point `betterprivacy.app` at the host.
+Preserve `/m` with or without a trailing slash, including its fragment.
+Directory-index redirects must retain fragments. Do not rewrite tool routes
+to the landing page. Any static host with directory indexes can serve this
+folder; a redirect from `/m` to `/m/` is fine if it keeps the fragment.
 
-## What's in the page
+## UX pass
 
-- **Two-column hero**: copy + at-a-glance facts on the left; on the right a
-  **self-playing illustration** of the plugin — a scripted cursor clicks the
-  🦇, types a phrase, the channel arms, the friend's message decrypts, a reply
-  is typed, sent as ciphertext, and decrypts locally. Loops while on-screen;
-  jumps straight to the decrypted end-state under `prefers-reduced-motion`.
-- **Decryption lens** (hero background): a canvas field of dim ciphertext
-  glyphs; inside the cursor's radius the noise resolves into a readable hidden
-  sentence in green. Idles on a slow drift when there's no pointer. Static
-  texture under `prefers-reduced-motion`; renders only while the hero is
-  on-screen.
-- **Redaction wipe** on the headline's key phrase; decoding mono status line;
-  ciphertext marquee band.
-- All motion is gated behind `prefers-reduced-motion`; transitions name exact
-  properties and use strong custom easing curves.
+The landing page leads with the desktop Discord plugin. Browser creation and
+opening support mobile users and recipients without the plugin. A two-column hero keeps the
+product illustration beside the explanation, with no autoplay or decorative
+canvas. The reveal is an accessible button, not a hover-only interaction.
 
-## The decrypt page (`m/index.html`)
+Create and Open share navigation, language controls, typography, form controls,
+and a light reading surface on a dark background. On phones the introduction
+moves above the form. Buttons have visible keyboard focus; errors appear next
+to the action with live status announcements. Clipboard denial selects the
+link for manual copying. Native sharing is offered when supported.
 
-Served at `betterprivacy.app/m`. Every encrypted message is a link here with
-the payload in the URL **fragment** (`#v1.<keyId>.<salt>.<iv>.<ct>`), which
-browsers never send to servers. The page mirrors the plugin's crypto exactly
-(PBKDF2-HMAC-SHA256 ×600,000 → AES-256-GCM via WebCrypto) and decrypts
-entirely client-side after the visitor types the secret phrase. Text
-messages only; `.bpenc` attachments still require the plugin.
+The reader keeps existing message and file flows. Its empty state now accepts
+a pasted link. A recipient can create a reply without returning to the landing
+page. The reader clears the phrase after successful decryption and offers a
+Hide message action.
 
-Keep the wire-format strings (demo, marquee, this page's fragment regex) in
-sync with `src/crypto/wire.ts` if the format ever changes.
+## Message compatibility
+
+No wire-format, KDF, or container changes. New web messages use the published:
+
+```text
+https://betterprivacy.app/m#v1.<keyId>.<salt>.<iv>.<ciphertext>
+```
+
+PBKDF2-HMAC-SHA256 at 600,000 iterations derives an AES-256-GCM key.
+The key fingerprint remains the first six bytes of SHA-256(key material).
+The web composer generates a random 16-byte salt and 12-byte IV for each message;
+the salt is carried by the existing v1 envelope, so recipients need only the
+link and phrase. Keys are non-extractable and raw key buffers are cleared.
+
+One web message is limited to 1,360 UTF-8 bytes, matching the plugin's chunk
+budget, so the complete link fits Discord's 2,000-character message ceiling.
+This first web composer creates text messages, not encrypted files.
+The reader still opens plugin-created `.bpenc` files. The plugin can recover
+web-created or shared keys from the v1 salt and phrase after authenticating the
+message/container. Recipients never need to reconstruct the sender's key label.
+
+No message, phrase, or generated link is saved to localStorage. Only the
+EN/TR/RU language preference (`bp-lang`) persists. The encrypted payload is in
+the URL fragment, not a query string. There are no external fonts, analytics,
+or third-party scripts. Links are not revocable and do not expire.
+
+## Verification
+
+```sh
+npm test
+npm run typecheck
+npm run build:site
+```
+
+- `tests/createPageFlow.test.ts` executes the shipped composer and reader:
+  web → plugin crypto and web → web roundtrips, randomness, UTF-8 limits,
+  edit-during-encryption races, native sharing, manual clipboard fallback,
+  pasted link validation, EN/TR/RU, and no secret persistence.
+- `tests/webPageFlow.test.ts` covers existing message and `.bpenc` UI flows.
+- `tests/webPageParity.test.ts` runs the reader's actual crypto functions
+  against plugin-produced messages and containers.
+- `tests/pluginFlows.test.ts` drives the real send/upload patches with controlled
+  Discord adapters: long-message ordering, failed parts, lock cancellation,
+  authenticated recovery, file retries and blocked uploads when hooks are missing.
+
+These tests use jsdom and WebCrypto. They validate interactions and format
+compatibility, not browser rendering or iOS/Android native share sheets.

@@ -14,6 +14,7 @@
 import type { PluginContext, SettingsData } from '../types'
 import { friendlyFailureNames } from '../index'
 import { openCreateKeyModal } from './UnlockModal'
+import { t } from '../i18n'
 
 const MB = 1024 * 1024
 
@@ -50,7 +51,7 @@ function toNonNegativeInt(raw: string, fallback: number): number {
 function ImportKeyContent(props: { state: { blob: string; pass: string } }): JSX.Element {
   return (
     <div>
-      <label className="bp-modal-label">Key blob</label>
+      <label className="bp-modal-label">{t('km.import.blobLabel')}</label>
       <textarea
         className="bp-modal-input"
         rows={3}
@@ -60,11 +61,11 @@ function ImportKeyContent(props: { state: { blob: string; pass: string } }): JSX
           props.state.blob = e.target.value
         }}
       />
-      <label className="bp-modal-label">Passphrase</label>
+      <label className="bp-modal-label">{t('km.import.passLabel')}</label>
       <input
         className="bp-modal-input"
         type="password"
-        placeholder="Passphrase for this key"
+        placeholder={t('km.import.passPh')}
         onChange={(e: any) => {
           props.state.pass = e.target.value
         }}
@@ -77,9 +78,9 @@ function openImportKeyModal(ctx: PluginContext, onDone: () => void): void {
   // onConfirm is sync and the modal closes immediately; the inputs mirror
   // their values into this closure and the async import runs afterwards.
   const state = { blob: '', pass: '' }
-  BdApi.UI.showConfirmationModal('Import key', <ImportKeyContent state={state} />, {
-    confirmText: 'Import',
-    cancelText: 'Cancel',
+  BdApi.UI.showConfirmationModal(t('km.import.title'), <ImportKeyContent state={state} />, {
+    confirmText: t('common.import'),
+    cancelText: t('common.cancel'),
     onConfirm: () => {
       void ctx.keyring
         .importBlob(state.blob.trim(), state.pass)
@@ -91,14 +92,14 @@ function openImportKeyModal(ctx: PluginContext, onDone: () => void): void {
           } catch {
             // Import stands on its own; unlocking can be done later.
           }
-          BdApi.UI.showToast(`BetterPrivacy: imported & unlocked "${entry.label}" (${entry.id})`, {
+          BdApi.UI.showToast(t('km.imported', { label: entry.label, id: entry.id }), {
             type: 'success',
           })
           ctx.forceRerender()
           onDone()
         })
         .catch((err: any) => {
-          BdApi.UI.showToast(err?.message ?? 'Key import failed', { type: 'error' })
+          BdApi.UI.showToast(err?.message ?? t('km.importFailed'), { type: 'error' })
         })
     },
   })
@@ -138,29 +139,29 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
     try {
       const blob = ctx.keyring.exportBlob(id)
       void navigator.clipboard.writeText(blob).then(
-        () => BdApi.UI.showToast('Key blob copied to clipboard', { type: 'success' }),
-        () => BdApi.UI.showToast('Could not write to clipboard', { type: 'error' }),
+        () => BdApi.UI.showToast(t('km.copied'), { type: 'success' }),
+        () => BdApi.UI.showToast(t('km.copyFailed'), { type: 'error' }),
       )
     } catch (err: any) {
-      BdApi.UI.showToast(err?.message ?? 'Export failed', { type: 'error' })
+      BdApi.UI.showToast(err?.message ?? t('km.exportFailed'), { type: 'error' })
     }
   }
 
   const deleteKey = (id: string, label: string): void => {
     BdApi.UI.showConfirmationModal(
-      'Delete key',
-      `Delete key "${label}" (${id})? Messages encrypted with it become unreadable until the key is imported again.`,
+      t('km.deleteTitle'),
+      t('km.deleteBody', { label, id }),
       {
         danger: true,
-        confirmText: 'Delete',
-        cancelText: 'Cancel',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
         onConfirm: () => {
           // Lock first so the session key and any cached plaintext for it are
           // purged (via the onRelock wiring), then drop the keyring entry —
           // mirrors ChatBarControls.removeKey.
           ctx.session.lockKey(id)
           ctx.keyring.remove(id)
-          BdApi.UI.showToast(`Key "${label}" deleted`, { type: 'info' })
+          BdApi.UI.showToast(t('km.deleted', { label }), { type: 'info' })
           bump()
           ctx.forceRerender()
         },
@@ -170,25 +171,23 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
 
   return (
     <div className="bp-settings">
-      <h3>Health</h3>
+      <h3>{t('km.health')}</h3>
       {ctx.modules.failed.length > 0 ? (
         <div style={{ color: 'var(--status-danger, #ed4245)', fontSize: 13 }}>
-          {'⚠'} Discord integration degraded — affected:{' '}
-          {friendlyFailureNames(ctx.modules.failed).join(', ')}. A Discord or plugin update is
-          likely needed.
+          {t('km.degraded', { list: friendlyFailureNames(ctx.modules.failed).join(', ') })}
         </div>
       ) : (
-        <div className="bp-hint">All Discord integration points healthy.</div>
+        <div className="bp-hint">{t('km.healthy')}</div>
       )}
 
-      <h3>🦇 Key Manager</h3>
+      <h3>{t('km.title')}</h3>
       <table className="bp-table">
         <thead>
           <tr>
-            <th>Label</th>
-            <th>Key ID</th>
-            <th>Scope</th>
-            <th>Created</th>
+            <th>{t('km.th.label')}</th>
+            <th>{t('km.th.keyId')}</th>
+            <th>{t('km.th.scope')}</th>
+            <th>{t('km.th.created')}</th>
             <th></th>
           </tr>
         </thead>
@@ -199,14 +198,14 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
               <td>
                 <code>{k.id}</code>
               </td>
-              <td>{k.scope === 'global' ? 'global' : k.scope}</td>
+              <td>{k.scope === 'global' ? t('km.scope.global') : k.scope}</td>
               <td>{new Date(k.createdAt).toLocaleDateString()}</td>
               <td style={{ whiteSpace: 'nowrap' }}>
                 <button className="bp-btn bp-btn-secondary" onClick={() => exportKey(k.id)}>
-                  Export
+                  {t('km.export')}
                 </button>{' '}
                 <button className="bp-btn bp-btn-danger" onClick={() => deleteKey(k.id, k.label)}>
-                  Delete
+                  {t('common.delete')}
                 </button>
               </td>
             </tr>
@@ -214,7 +213,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           {keys.length === 0 ? (
             <tr>
               <td colSpan={5} className="bp-hint">
-                No keys yet — create or import one below.
+                {t('km.noKeys')}
               </td>
             </tr>
           ) : null}
@@ -223,32 +222,49 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button className="bp-btn" onClick={() => void openCreateKeyModal(ctx).then(() => bump())}>
-          New key{'…'}
+          {t('km.newKey')}
         </button>
         <button
           className="bp-btn bp-btn-secondary"
           onClick={() => openImportKeyModal(ctx, () => bump())}
         >
-          Import key{'…'}
+          {t('km.importKey')}
         </button>
         <button
           className="bp-btn bp-btn-danger"
           style={{ marginLeft: 'auto' }}
           onClick={() => {
             ctx.session.lockAll('manual')
-            BdApi.UI.showToast('BetterPrivacy: all keys locked', { type: 'info' })
+            BdApi.UI.showToast(t('km.allLocked'), { type: 'info' })
             bump()
           }}
         >
-          Lock all now
+          {t('km.lockAllNow')}
         </button>
       </div>
 
-      <h3>Session</h3>
-      <Row
-        label="Lockdown mode"
-        hint="Switching channels re-locks everything until passphrases are re-entered."
-      >
+      <h3>{t('km.section.language')}</h3>
+      <Row label={t('km.language')} hint={t('km.languageHint')}>
+        <select
+          className="bp-modal-input"
+          style={{ width: 'auto', margin: 0 }}
+          value={settings.language}
+          onChange={(e: any) => {
+            patch({ language: e.target.value })
+            // Chips/menus already on screen hold strings from the old locale —
+            // broadcast so they re-render in the new one.
+            ctx.forceRerender()
+          }}
+        >
+          <option value="auto">{t('km.language.auto')}</option>
+          <option value="en">English</option>
+          <option value="tr">Türkçe</option>
+          <option value="ru">Русский</option>
+        </select>
+      </Row>
+
+      <h3>{t('km.section.session')}</h3>
+      <Row label={t('km.lockdown')} hint={t('km.lockdownHint')}>
         <input
           type="checkbox"
           checked={settings.lockdown}
@@ -256,19 +272,19 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         />
       </Row>
       {settings.lockdown ? (
-        <Row label="Relock scope" hint="Which keys are locked on a channel switch.">
+        <Row label={t('km.relockScope')} hint={t('km.relockScopeHint')}>
           <select
             className="bp-modal-input"
             style={{ width: 'auto', margin: 0 }}
             value={settings.relockScope}
             onChange={(e: any) => patch({ relockScope: e.target.value })}
           >
-            <option value="all">All keys</option>
-            <option value="previousChannelOnly">Previous channel only</option>
+            <option value="all">{t('km.relock.all')}</option>
+            <option value="previousChannelOnly">{t('km.relock.prev')}</option>
           </select>
         </Row>
       ) : null}
-      <Row label="Decrypt timeout (seconds)" hint="0 = never, default 10800">
+      <Row label={t('km.timeout')} hint={t('km.timeoutHint')}>
         <input
           className="bp-modal-input"
           style={{ width: 100, margin: 0 }}
@@ -283,8 +299,8 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         />
       </Row>
 
-      <h3>Appearance</h3>
-      <Row label="Indicator color" hint="Text color and lock glyph of decrypted messages.">
+      <h3>{t('km.section.appearance')}</h3>
+      <Row label={t('km.indicator')} hint={t('km.indicatorHint')}>
         <input
           type="color"
           value={settings.indicatorColor}
@@ -292,11 +308,8 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         />
       </Row>
 
-      <h3>Media & memory</h3>
-      <Row
-        label="Max auto-download size (MB)"
-        hint="Encrypted attachments larger than this are not fetched automatically."
-      >
+      <h3>{t('km.section.media')}</h3>
+      <Row label={t('km.maxAuto')} hint={t('km.maxAutoHint')}>
         <input
           className="bp-modal-input"
           style={{ width: 100, margin: 0 }}
@@ -311,7 +324,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           }
         />
       </Row>
-      <Row label="Memory budget (MB)" hint="Decrypted media beyond this budget is LRU-evicted.">
+      <Row label={t('km.memBudget')} hint={t('km.memBudgetHint')}>
         <input
           className="bp-modal-input"
           style={{ width: 100, margin: 0 }}
@@ -324,18 +337,15 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
         />
       </Row>
 
-      <h3>Advanced</h3>
-      <Row label="Client-side link previews (experimental — leaks URLs to target sites)">
+      <h3>{t('km.section.advanced')}</h3>
+      <Row label={t('km.linkPreviews')}>
         <input
           type="checkbox"
           checked={settings.clientLinkPreviews}
           onChange={(e: any) => patch({ clientLinkPreviews: e.target.checked })}
         />
       </Row>
-      <Row
-        label="Master passphrase"
-        hint="not yet implemented — v1 stores keyring metadata unencrypted"
-      >
+      <Row label={t('km.master')} hint={t('km.masterHint')}>
         <input type="checkbox" checked={settings.masterPassphraseEnabled} disabled />
       </Row>
     </div>

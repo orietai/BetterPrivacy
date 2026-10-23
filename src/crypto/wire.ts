@@ -1,7 +1,5 @@
 /**
- * Wire format v1 — the release format, and the only one that exists
- * (test-era formats were deleted before first release; see
- * PRE-LAUNCH-REVIEW.md D1/D3):
+ * Wire format v1 — the first public release's sole message format:
  *
  *   🦇<https://betterprivacy.app/m#v1.<keyId>.<salt>.<iv>.<ciphertext>>
  *
@@ -32,21 +30,73 @@ import type { WireParts } from '../types'
 const WIRE_URL_PREFIX = 'https://betterprivacy.app/m#v1.'
 
 export const WIRE_REGEX =
-  /^(?:🦇)?<?https:\/\/betterprivacy\.app\/m#v1\.([A-Za-z0-9_-]{8})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)>?$/
+  /^(?:🦇)?<?https:\/\/betterprivacy\.app\/m\/?#v1\.([A-Za-z0-9_-]{8})\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]{16})\.([A-Za-z0-9_-]+)>?$/
 
 /**
- * Conservative plaintext cap. Fixed wire overhead is ≈ 84 UTF-16 units
- * (🦇 + <> + URL prefix + keyId + salt + iv + separators); worst-case ASCII
- * plaintext of 1400 chars encodes to base64url(1400 + 16-byte GCM tag)
- * ≈ 1888 chars → ≈ 1972 total, under Discord's 2000. This guards typical
- * input length up front; the definitive guard is encodeWire, which throws
- * BP_OVERSIZE if the final wire string exceeds the limit (multi-byte-heavy
- * plaintext inflates the UTF-8 → ciphertext → base64url length beyond the
- * char count).
+ * Per-chunk plaintext budget in UTF-8 BYTES (not UTF-16 chars — multi-byte
+ * text inflates through UTF-8 → ciphertext → base64url). Fixed wire overhead
+ * is ≈ 84 UTF-16 units (🦇 + <> + URL prefix + keyId + salt + iv +
+ * separators); 1360 plaintext bytes + 16-byte GCM tag encode to
+ * ceil(1376 × 4 / 3) = 1835 b64url chars → ≈ 1919 total, safely under
+ * Discord's 2000. The definitive guard is still encodeWire's BP_OVERSIZE.
  */
-export const MAX_PLAINTEXT_CHARS = 1400
+export const CHUNK_UTF8_BYTES = 1360
 
-const DISCORD_MESSAGE_LIMIT = 2000
+/**
+ * Splits plaintext into chunks that each fit one wire message. Chunks are
+ * lossless (concatenating them reproduces the input exactly), never split a
+ * surrogate pair (code-point iteration), and prefer breaking just after
+ * whitespace when one occurred past 60% of the byte budget — so parts read
+ * naturally instead of cutting mid-word.
+ *
+ * UNBOUNDED: as many chunks as the text needs, no cap and no throw. A cap
+ * here would only reintroduce the "encryption is broken" failure a user sees
+ * when a paste is refused; the friction for genuinely huge sends belongs in
+ * the UI instead, so send.ts asks for one confirmation past its
+ * many-parts threshold.
+ */
+export function chunkPlaintext(text: string): string[] {
+  const chunks: string[] = []
+  let start = 0 // UTF-16 index where the current chunk begins
+  let i = 0
+  let bytes = 0
+  let breakAt = -1 // UTF-16 index just after the last whitespace in this chunk
+  let breakBytes = 0
+
+  while (i < text.length) {
+    const cp = text.codePointAt(i)!
+    const cpUnits = cp > 0xffff ? 2 : 1
+    const cpBytes = cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4
+
+    if (bytes + cpBytes > CHUNK_UTF8_BYTES) {
+      const cut = breakAt > start && breakBytes >= CHUNK_UTF8_BYTES * 0.6 ? breakAt : i
+      chunks.push(text.slice(start, cut))
+      start = cut
+      i = cut
+      bytes = 0
+      breakAt = -1
+      breakBytes = 0
+      continue
+    }
+
+    bytes += cpBytes
+    i += cpUnits
+    if (cp === 0x20 /* space */ || cp === 0x0a /* \n */ || cp === 0x09 /* \t */) {
+      breakAt = i
+      breakBytes = bytes
+    }
+  }
+
+  chunks.push(text.slice(start))
+  return chunks
+}
+
+/**
+ * Discord's own per-message character ceiling. Exported because the send
+ * patch's '/pt ' passthrough has to enforce it client-side now that
+ * patches/composerLimit.ts lets longer text reach the patch.
+ */
+export const DISCORD_MESSAGE_LIMIT = 2000
 
 /** Throws Error('BP_OVERSIZE') if the encoded message would exceed 2000 chars. */
 export function encodeWire(p: WireParts): string {

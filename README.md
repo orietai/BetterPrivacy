@@ -27,7 +27,9 @@ A BetterDiscord plugin that adds **client-side end-to-end encryption** to Discor
 - **Recipient filtering:** only users with the key can read encrypted messages; others see raw ciphertext.
 - **Visual distinction:** decrypted messages are highlighted (colored text + lock-open icon) so you always know what's encrypted.
 - **Rich content:** encrypted messages support all Discord text formatting — **bold**, `code`, spoiler tags, custom emoji, mentions (as text), links, and more. Code blocks render with syntax highlighting.
+- **Long messages split themselves:** ciphertext is bigger than plaintext, so a long message no longer fits one Discord message. The plugin splits it into several encrypted parts and sends them in order — you just type and hit enter.
 - **Encrypted files:** images, videos, audio, and any file attachment can be encrypted and uploaded as `.bpenc` blobs. Recipients see inline previews (images/video) or a download button.
+- **Three languages:** the plugin's own buttons, menus, toasts and settings speak **English, Turkish and Russian**, following Discord's own language setting by default.
 - **Two locking modes:**
   - **Timeout mode (default):** keys stay unlocked across channel switches until an inactivity timer expires (default 3 hours).
   - **Lockdown mode (opt-in):** switching channels or DMs re-locks everything; you must re-enter your passphrase for each space. For maximum paranoia.
@@ -39,10 +41,14 @@ A BetterDiscord plugin that adds **client-side end-to-end encryption** to Discor
 ### Build
 
 ```bash
+npm ci
 npm run build
 ```
 
 This creates a distributable bundle at **`dist/BetterPrivacy.plugin.js`**.
+
+Before publishing the plugin and website together, run `npm run verify:release`.
+See [RELEASE-CHECK.md](RELEASE-CHECK.md) for verified flows and the remaining live-device checks.
 
 ### Deploy to BetterDiscord
 
@@ -80,6 +86,8 @@ Everything runs through **one button**: the 🦇 in the chat bar.
 
 Tell them the phrase — **outside Discord** (in person, or over any encrypted messenger). They click the 🦇 in the same channel (or click any `🔒 Encrypted message — click to recover` chip), type the same phrase, and everything decrypts. That's the whole exchange.
 
+**Peers without the plugin** aren't locked out either. Every encrypted message is a clickable 🦇 link to **betterprivacy.app/m**, where the same phrase decrypts it in their browser. That page also takes **files**: they download the `.bpenc` attachment from Discord, drop it on the page, type the phrase, and get an inline preview (image/video/audio) plus a download link with the real filename. Nothing is uploaded — the message payload rides in the URL fragment (which browsers never send to a server) and the file is read locally.
+
 ### 3. Lock & Unlock
 
 - Keys stay unlocked while you're active; after 3 hours idle (configurable) everything re-locks.
@@ -97,6 +105,9 @@ Change phrase, forget this channel's key, lock everything. Power features — mu
 ```
 /pt This is a public message
 ```
+
+This overrides **text only**. Attachments still follow the channel's encryption mode.
+To send an unencrypted file, explicitly pause encryption first.
 
 **`/enc <key-label> <message>`** — Encrypt this message with a specific key (ignoring the active key picker):
 
@@ -125,6 +136,20 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 - **Chat bar:** the lock button and key dropdown are per-channel. Encrypt mode + active key are remembered.
 - **Context menu:** right-click a channel to set a default encryption key for that channel (future messages default to that key).
 
+### 8. Long Messages
+
+Nothing to do — type as much as you like and press enter. If the plaintext doesn't fit one encrypted message, the plugin splits it (preferring a break after a space or newline, so parts don't cut mid-word), toasts *"🦇 Long message — sending encrypted in N parts"*, and sends the parts **in order**, each one waiting for the previous to land. Recipients simply see N consecutive decrypted messages.
+
+The budget is **1360 UTF-8 bytes of plaintext per part** — plain English text runs ~1360 characters per part, Turkish/Russian/CJK fewer, since those characters cost 2–4 bytes each. There is **no part limit**: the plugin splits into as many parts as the text needs. Past **10 parts** it asks once ("this will be N separate messages — send them all?") so a huge accidental paste can't fire off a wall of messages; decline and nothing is sent.
+
+Discord normally refuses to *send* past 2000 characters (4000 with Nitro), and turns a paste bigger than that into a `message.txt` file — either one would stop long text from ever reaching the splitter. So while a channel's encryption is **ON**, the plugin lets the chat box send the whole thing, and keeps a big paste as text in the composer instead of converting it to a file. Discord's own character counter may still show you over the limit; the send goes through anyway. Turn encryption off and Discord's limits are back, unchanged. If a Discord update moves the internals the plugin patches for this, it falls back to the native behaviour: sending, splitting and encryption keep working, you just can't send past 2000/4000 characters in one go (and a big paste becomes a file again — still encrypted, as `.bpenc`).
+
+### 9. Language
+
+**Settings → BetterPrivacy → Language** picks the language of the plugin's own UI: **Auto (follow Discord)**, English, Türkçe, or Русский. The default is **Auto**, which takes the language you selected in Discord itself, falls back to your browser/system language, and finally to English. Changing it applies immediately, including to chips and menus already on screen.
+
+Only BetterPrivacy's own strings are translated — Discord's UI, your messages, and the plugin's console logs (which exist for bug reports) are untouched.
+
 ---
 
 ## Features & Coverage Matrix
@@ -137,6 +162,7 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 | **Custom/animated emoji** | ✅ Full | Syntax `<:name:id>` encrypted; renders post-decrypt. No server emoji stats sent |
 | **Spoiler tags** (`\|\|...\|\|`) | ✅ Full | Encrypted; render as native spoiler post-decrypt |
 | **Headings, blockquotes, lists** | ✅ Full | Encrypted & render post-decrypt |
+| **Long messages** | ✅ Full | Composer limit raised while encrypted; auto-split into as many encrypted parts as needed (1360 UTF-8 plaintext bytes each), sent in order; every part decrypts on its own |
 | **Mentions** (@user, @role, #channel) | ✅ Display only | Render fine; **no notifications sent** (server never saw the mention) |
 | **Links** | ✅ Full | Encrypted; Discord's server-side link previews don't fire (privacy win) |
 | **Images & GIFs** | ✅ Full | Uploaded as `.bpenc`; recipients see inline preview when unlocked |
@@ -149,6 +175,8 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 | **Polls & forms** | ❌ Not supported | Fully server-side structures |
 | **Voice/video calls** | ❌ Out of scope | Not a chat feature |
 | **GIF picker (Tenor)** | ⚠️ Fallback | Download client-side & send as encrypted `.bpenc` instead of linking server-side |
+| **Plugin UI language** | ✅ Full | English · Türkçe · Русский, following Discord's language by default (Settings → BetterPrivacy → Language) |
+| **Reading without the plugin** | ✅ Full | `betterprivacy.app/m` decrypts both linked messages and downloaded `.bpenc` files, entirely in the browser |
 
 ---
 
@@ -165,9 +193,22 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 #### Encryption Design
 
 - **Passphrase-based symmetric E2E.** No forward secrecy or message ratcheting — if your passphrase is compromised, all past and future messages encrypted with it are at risk.
-- **No automatic key exchange.** You must share passphrases out-of-band, which is friction but more secure than auto-negotiation.
+- **No automatic key exchange.** Share the phrase through a separate private channel.
 - **Deterministic key derivation.** The KDF salt is derived from the key's label (not random), which is what makes "label + passphrase recreates the key anywhere" possible. The trade-off: an attacker who guesses the label can precompute a cracking dictionary for it, so **the passphrase's strength is your entire defense**. A second consequence: **two completely unrelated users who happen to pick the same label + passphrase derive the *identical* key** — no cracking involved. Each can silently decrypt the other's messages, and because the key ID (a public fingerprint of the key) is embedded in every message, it also links those otherwise-unrelated communities as sharing a passphrase. Passphrases must therefore be long **and** unique — a common label (like "friends") combined with a common passphrase is effectively a public key. (The 600,000-round PBKDF2 cost still applies to every *guess*, but no guessing is needed when the pair collides outright.)
-- **Messages advertise the plugin.** Every encrypted message is a 🦇-branded link — `🦇<https://betterprivacy.app/m#v1.…>` — that anyone can click: the decrypt page reads the payload from the URL fragment (never sent to any server) and unlocks it in the browser once the phrase is entered. This is by design and also means Discord can trivially detect that you send encrypted messages (the *fact* of encryption was never hidden — ciphertext is obvious regardless). The KDF salt rides in the link; it derives from public data, so this discloses nothing new.
+- **Messages advertise the plugin.** Every encrypted message is a 🦇-branded link — `🦇<https://betterprivacy.app/m#v1.<keyId>.<salt>.<iv>.<ciphertext>>` — that anyone can click: the decrypt page reads the payload from the URL fragment (never sent to any server) and unlocks it in the browser once the phrase is entered. This is by design and also means Discord can trivially detect that you send encrypted messages (the *fact* of encryption was never hidden — ciphertext is obvious regardless). The KDF salt rides in the link; it derives from public data, so this discloses nothing new.
+- **Encrypted files carry a small plaintext header.** The `.bpenc` container is:
+
+  ```
+  bytes 0–5   : magic "BPENC1"
+  bytes 6–13  : key ID (8 ASCII chars, base64url)
+  bytes 14–29 : KDF salt (16 raw bytes)
+  bytes 30–41 : header IV (12 random bytes)
+  bytes 42–45 : uint32 BE — encrypted-header length
+  bytes 46–…  : AES-GCM(header JSON: filename, mime, size, sha256, chunks)
+  remainder   : the file itself in 8 MB AES-GCM chunks, each with its own tag
+  ```
+
+  Only the first 46 bytes are readable: magic, key ID and salt. **The real filename, mime type and size are inside the encrypted header**, and the plaintext's SHA-256 is verified after decryption. The salt is there for the same reason it rides in the message link — it is key-derivation metadata derived from public data, not a secret — and carrying it is what lets `betterprivacy.app/m` decrypt a downloaded `.bpenc` from the phrase alone, with no knowledge of the channel or key label.
 
 #### Metadata
 
@@ -176,8 +217,9 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 - **Who** messages whom (sender/recipient, channel/DM structure).
 - **When** messages are sent (server timestamp).
 - **Where** messages are sent (channel/DM identifiers).
-- **Message length** (ciphertext is slightly longer than plaintext due to IV + auth tag, ~33% overhead).
-- **Key ID** (first 6 bytes of the key fingerprint, embedded in each message). The same key ID reveals that two messages use the same key.
+- **Message length** (ciphertext is slightly longer than plaintext due to IV + auth tag, ~33% overhead) — and, for a long message, **how many parts** it was split into.
+- **Key ID** (first 6 bytes of the key fingerprint, embedded in each message and in every `.bpenc` header). The same key ID reveals that two messages, or a message and a file, use the same key.
+- **The KDF salt**, which rides in the clear in both the message link and the `.bpenc` header. It derives from public data (see above), but it does identify which key's derivation a message or file belongs to.
 - **Attachment filenames are hidden** (encrypted as `.bpenc`), but file size is visible.
 - **Edits, deletions, reactions** — the fact of these actions is visible, even if the content is encrypted.
 
@@ -206,6 +248,17 @@ Encrypted mentions (`<@user>` or `<@&role>` or `<#channel>`) render correctly bu
 ### Links Don't Preview
 
 Server-side link preview embeds don't fire for encrypted messages (a privacy win). If you want client-side previews anyway, enable **Settings** → **BetterPrivacy** → **Client-side link previews** (experimental, may leak URLs to the target site).
+
+### Long Messages Arrive as Several Messages
+
+A long message becomes **N real Discord messages**, not one. Consequences worth knowing:
+
+- Each part is an independent encrypted message: recipients can decrypt any part on its own, and deleting or editing one part doesn't affect the others.
+- **A missing part is silently missing.** Parts carry no "3 of 5" marker, so if one is deleted (by you, a moderator, or AutoMod) the remaining text just reads as if the gap were never there. Re-send if it matters.
+- Only the **first** part inherits the original send — a reply reference attaches to part 1; the follow-ups are plain messages in the channel.
+- If a part fails to send (network, slowmode, AutoMod), the remaining parts are **cancelled** with a toast naming which part died. The parts already sent stay up; nothing falls back to plaintext.
+- There is **no cap on parts**, but past **10** the plugin asks for confirmation before sending anything. Sends stay sequential — each part waits for the previous one — which is also what keeps a long send from tripping Discord's rate limits.
+- The composer accepts far more than Discord's usual 2000/4000 characters **while the channel's encryption is ON** — that raise is what lets long text reach the splitter at all. With encryption off, Discord's native limit applies as normal; and if a Discord update hides the module the plugin patches for this, typing quietly falls back to the native cap (everything else keeps working).
 
 ### Files Auto-Download Cap
 
@@ -258,6 +311,18 @@ A: No. BetterDiscord (and thus BetterPrivacy) is a desktop client modification o
 **Q: Can I encrypt reactions or polls?**
 
 A: No. These are server-side Discord objects. The plugin blocks them while encrypt mode is ON and suggests using encrypted text messages instead.
+
+**Q: Is there a maximum message length?**
+
+A: No. While the channel is encrypted the plugin raises the composer's limit, then splits anything longer than one encrypted message (1360 UTF-8 bytes of plaintext) into as many parts as it takes, sent in order. Sends needing more than 10 parts ask for one confirmation first; decline and nothing is sent.
+
+**Q: Can someone read my encrypted messages or files without installing the plugin?**
+
+A: Yes, if they have the phrase. Every encrypted message is a link to `betterprivacy.app/m`, which decrypts it in their browser; downloaded `.bpenc` attachments can be dropped onto that same page. The page is static, has no backend, and does all the crypto locally — the payload never leaves their machine.
+
+**Q: Can I change the plugin's language?**
+
+A: **Settings → BetterPrivacy → Language** — Auto (follow Discord), English, Türkçe or Русский. Auto uses your Discord language, then your browser/system language, then English.
 
 **Q: How large can encrypted files be?**
 

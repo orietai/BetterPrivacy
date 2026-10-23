@@ -14,6 +14,7 @@
 
 import { PLUGIN_NAME, type KeyEntry, type Keyring, type Scope } from '../types'
 import { deriveKeyMaterial, deriveSaltFromLabel } from '../crypto/kdf'
+import { t } from '../i18n'
 
 const KEYRING_KEY = 'keyring'
 const PREFS_KEY = 'channelPrefs'
@@ -124,9 +125,7 @@ export function createKeyring(): Keyring {
 
   function addEntry(entry: KeyEntry): void {
     if (entries.some((e) => e.id === entry.id)) {
-      throw new Error(
-        `A key with id ${entry.id} already exists in the keyring (same passphrase+salt). Remove it first or use the existing entry.`,
-      )
+      throw new Error(t('kr.exists', { id: entry.id }))
     }
     entries.push(entry)
     saveEntries()
@@ -150,10 +149,8 @@ export function createKeyring(): Keyring {
     },
 
     async create(label: string, passphrase: string, scope: Scope): Promise<KeyEntry> {
-      // Deterministic salt (since 0.2): label + passphrase fully determine the
-      // key, so re-creating after a reinstall/config wipe re-derives the SAME
-      // keyId and old messages decrypt again. Legacy entries keep their stored
-      // random salts and remain valid.
+      // Label + passphrase determine the key, so reinstalling and recreating
+      // the same pair restores access without retaining local configuration.
       const salt = await deriveSaltFromLabel(label)
       const derived = await deriveKeyMaterial(passphrase, salt)
       // Same label+passphrase → same key: idempotent restore, not an error.
@@ -176,28 +173,28 @@ export function createKeyring(): Keyring {
     async importBlob(blob: string, passphrase: string, scope: Scope = 'global'): Promise<KeyEntry> {
       const trimmed = blob.trim()
       if (!trimmed.startsWith(BLOB_PREFIX)) {
-        throw new Error('Not a BetterPrivacy key blob (expected "betterprivacy-key:...")')
+        throw new Error(t('kr.notBlob'))
       }
       let parsed: unknown
       try {
         parsed = JSON.parse(b64DecodeUtf8(trimmed.slice(BLOB_PREFIX.length)))
       } catch {
-        throw new Error('Malformed key blob (invalid base64 or JSON)')
+        throw new Error(t('kr.malformed'))
       }
       if (typeof parsed !== 'object' || parsed === null) {
-        throw new Error('Malformed key blob (unexpected shape)')
+        throw new Error(t('kr.malformedShape'))
       }
       const p = parsed as Record<string, unknown>
       const label = p['label']
       const salt = p['salt']
       const check = p['check']
       if (typeof label !== 'string' || typeof salt !== 'string' || salt.length === 0 || typeof check !== 'string' || check.length === 0) {
-        throw new Error('Malformed key blob (missing label, salt, or check)')
+        throw new Error(t('kr.malformedFields'))
       }
 
       const derived = await deriveKeyMaterial(passphrase, salt)
       if (derived.kcv !== check) {
-        throw new Error('Wrong passphrase or corrupted key blob')
+        throw new Error(t('kr.wrongPass'))
       }
 
       // Re-importing a key that's already present is a no-op, not an error.
@@ -216,9 +213,27 @@ export function createKeyring(): Keyring {
       return entry
     },
 
+    async recover(label, passphrase, metadata, scope, authenticate): Promise<KeyEntry> {
+      if (!/^[A-Za-z0-9_-]{8}$/.test(metadata.keyId) || !/^[A-Za-z0-9_-]{22}$/.test(metadata.salt)) {
+        throw new Error(t('kr.malformedFields'))
+      }
+      const derived = await deriveKeyMaterial(passphrase, metadata.salt)
+      if (derived.keyId !== metadata.keyId) throw new Error(t('um.wrongPassphrase'))
+      // A fingerprint alone is not proof of an intact message/container.
+      // Authenticate before writing: wrong phrases and tampered data add nothing.
+      await authenticate(derived.key)
+      const existing = entries.find((entry) => entry.id === derived.keyId)
+      if (existing) return existing
+      const entry: KeyEntry = {
+        id: derived.keyId, label, salt: metadata.salt, check: derived.kcv, scope, createdAt: Date.now(),
+      }
+      addEntry(entry)
+      return entry
+    },
+
     exportBlob(id: string): string {
       const entry = entries.find((e) => e.id === id)
-      if (!entry) throw new Error(`No key with id ${id} in the keyring`)
+      if (!entry) throw new Error(t('kr.noKey', { id }))
       const json = JSON.stringify({ label: entry.label, salt: entry.salt, check: entry.check })
       return BLOB_PREFIX + b64EncodeUtf8(json)
     },

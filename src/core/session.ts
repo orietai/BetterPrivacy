@@ -8,6 +8,7 @@
 
 import { PLUGIN_NAME, type KeyEntry, type Keyring, type RelockReason, type Session, type SettingsStore } from '../types'
 import { deriveKeyMaterial } from '../crypto/kdf'
+import { t } from '../i18n'
 
 const SWEEP_INTERVAL_MS = 60_000
 
@@ -21,6 +22,10 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
   const unlocked = new Map<string, UnlockedKey>()
   const relockListeners: Array<(keyIds: string[] | 'all', reason: RelockReason) => void> = []
   let sweepTimer: ReturnType<typeof setInterval> | null = null
+  let generation = 0
+  let revision = 0
+  let stopped = false
+  const keyGenerations = new Map<string, number>()
 
   function fireRelock(keyIds: string[] | 'all', reason: RelockReason): void {
     for (const cb of relockListeners) {
@@ -33,6 +38,9 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
   }
 
   function lockAll(reason: RelockReason): void {
+    // Also invalidate pending PBKDF2 work when no key has finished unlocking.
+    generation++
+    revision++
     if (unlocked.size === 0) return
     unlocked.clear()
     fireRelock('all', reason)
@@ -51,12 +59,16 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
     }
     if (purged.length > 0) {
       fireRelock(purged, 'timeout')
-      BdApi.UI.showToast('BetterPrivacy: session keys expired', { type: 'info' })
+      BdApi.UI.showToast(t('ses.expired'), { type: 'info' })
     }
   }
 
   return {
+    get revision(): number { return revision },
     async unlock(entry: KeyEntry, passphrase: string): Promise<boolean> {
+      if (stopped) return false
+      const started = generation
+      const keyStarted = keyGenerations.get(entry.id) ?? 0
       let derived
       try {
         derived = await deriveKeyMaterial(passphrase, entry.salt)
@@ -67,6 +79,7 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
       // Wrong passphrase => different derived bits => KCV and keyId both
       // diverge from the stored entry. Check both for defense in depth.
       if (derived.kcv !== entry.check || derived.keyId !== entry.id) return false
+      if (stopped || generation !== started || (keyGenerations.get(entry.id) ?? 0) !== keyStarted || !keyring.get(entry.id)) return false
       const now = Date.now()
       unlocked.set(entry.id, { key: derived.key, unlockedAt: now, lastUsedAt: now })
       return true
@@ -84,6 +97,8 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
     },
 
     lockKey(keyId: string): void {
+      revision++
+      keyGenerations.set(keyId, (keyGenerations.get(keyId) ?? 0) + 1)
       if (unlocked.delete(keyId)) {
         fireRelock([keyId], 'manual')
       }
@@ -96,6 +111,8 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
         lockAll('lockdown')
         return
       }
+      generation++
+      revision++
       // 'previousChannelOnly': lock only keys scoped to the channel we left.
       if (prevChannelId === null) return
       const toLock: string[] = []
@@ -105,15 +122,18 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
       }
       if (toLock.length === 0) return
       for (const keyId of toLock) unlocked.delete(keyId)
+      for (const keyId of toLock) keyGenerations.set(keyId, (keyGenerations.get(keyId) ?? 0) + 1)
       fireRelock(toLock, 'lockdown')
     },
 
     start(): void {
+      stopped = false
       if (sweepTimer !== null) return
       sweepTimer = setInterval(sweep, SWEEP_INTERVAL_MS)
     },
 
     stop(): void {
+      stopped = true
       if (sweepTimer !== null) {
         clearInterval(sweepTimer)
         sweepTimer = null

@@ -2,8 +2,20 @@ import { describe, expect, it } from 'vitest'
 
 import { deriveKeyMaterial, deriveSaltFromLabel } from '../src/crypto/kdf'
 import { decryptText, encryptText } from '../src/crypto/cipher'
-import { MAX_PLAINTEXT_CHARS, WIRE_REGEX, encodeWire, parseWire } from '../src/crypto/wire'
-import { CHUNK_SIZE, decryptBpenc, encryptFileToBpenc, peekBpencKeyId } from '../src/crypto/bpenc'
+import {
+  CHUNK_UTF8_BYTES,
+  WIRE_REGEX,
+  chunkPlaintext,
+  encodeWire,
+  parseWire,
+} from '../src/crypto/wire'
+import {
+  CHUNK_SIZE,
+  decryptBpenc,
+  encryptFileToBpenc,
+  peekBpencKeyId,
+  peekBpencSalt,
+} from '../src/crypto/bpenc'
 import { b64urlEncode, bufsrc } from '../src/crypto/b64'
 
 // Node 18+: WebCrypto is available as globalThis.crypto — no setup needed.
@@ -177,20 +189,75 @@ describe('wire', () => {
     }
   })
 
-  it('MAX_PLAINTEXT_CHARS is the conservative 1400 from the spec', () => {
-    expect(MAX_PLAINTEXT_CHARS).toBe(1400)
-  })
-
   it('encodeWire throws BP_OVERSIZE beyond 2000 chars', async () => {
     const { key, keyId } = await material()
     const { iv, ct } = await encryptText(key, 'x'.repeat(1900))
     expect(() => encodeWire({ keyId, salt: sharedSalt, iv, ciphertext: ct })).toThrow('BP_OVERSIZE')
-    // ...while a MAX_PLAINTEXT_CHARS ASCII message fits.
-    const ok = await encryptText(key, 'y'.repeat(MAX_PLAINTEXT_CHARS))
+    // ...while a full CHUNK_UTF8_BYTES ASCII chunk fits.
+    const ok = await encryptText(key, 'y'.repeat(CHUNK_UTF8_BYTES))
     expect(
       encodeWire({ keyId, salt: sharedSalt, iv: ok.iv, ciphertext: ok.ct }).length,
     ).toBeLessThanOrEqual(2000)
   })
+})
+
+describe('chunkPlaintext', () => {
+  const utf8Len = (s: string) => new TextEncoder().encode(s).length
+
+  it('returns a single identical chunk for short text', () => {
+    expect(chunkPlaintext('hello')).toEqual(['hello'])
+  })
+
+  it('is lossless and respects the UTF-8 byte budget', () => {
+    const input = ('word '.repeat(400) + 'çınar ünïcödé 🦇 ').repeat(3)
+    const chunks = chunkPlaintext(input)
+    expect(chunks.join('')).toBe(input)
+    for (const c of chunks) expect(utf8Len(c)).toBeLessThanOrEqual(CHUNK_UTF8_BYTES)
+  })
+
+  it('prefers breaking on word boundaries', () => {
+    const input = 'word '.repeat(800) // 4000 ASCII bytes → 3 chunks
+    const chunks = chunkPlaintext(input)
+    expect(chunks.length).toBe(3)
+    expect(chunks.join('')).toBe(input)
+    for (const c of chunks.slice(0, -1)) expect(c.endsWith(' ')).toBe(true)
+  })
+
+  it('never splits a surrogate pair', () => {
+    const input = '🦇'.repeat(1200) // 4800 UTF-8 bytes → multiple chunks
+    const chunks = chunkPlaintext(input)
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.join('')).toBe(input)
+    for (const c of chunks) {
+      new TextEncoder().encode(c)
+      expect(/[\uD800-\uDBFF]$/.test(c)).toBe(false) // no trailing high surrogate
+      expect(/^[\uDC00-\uDFFF]/.test(c)).toBe(false) // no leading low surrogate
+      expect(utf8Len(c)).toBeLessThanOrEqual(CHUNK_UTF8_BYTES)
+    }
+  })
+
+  it('is unbounded — splits into as many chunks as the text needs', () => {
+    const input = 'x'.repeat(CHUNK_UTF8_BYTES * 50)
+    const chunks = chunkPlaintext(input)
+    expect(chunks.length).toBe(50)
+    for (const c of chunks) expect(utf8Len(c)).toBeLessThanOrEqual(CHUNK_UTF8_BYTES)
+    expect(chunks.join('')).toBe(input)
+  })
+
+  it('every chunk of a long message round-trips the wire under 2000 chars', async () => {
+    const { key, keyId } = await material()
+    const input = 'lorem ipsum '.repeat(417) // ~5000 ASCII chars
+    const chunks = chunkPlaintext(input)
+    expect(chunks.join('')).toBe(input)
+    for (const chunk of chunks) {
+      const { iv, ct } = await encryptText(key, chunk)
+      const wire = encodeWire({ keyId, salt: sharedSalt, iv, ciphertext: ct })
+      expect(wire.length).toBeLessThanOrEqual(2000)
+      const parts = parseWire(wire)
+      expect(parts).toEqual({ keyId, salt: sharedSalt, iv, ciphertext: ct })
+      await expect(decryptText(key, parts!.iv, parts!.ciphertext)).resolves.toBe(chunk)
+    }
+  }, 30_000)
 })
 
 /** Fast byte-wise equality (vitest's deep toEqual is too slow for multi-MB arrays). */
@@ -214,7 +281,7 @@ describe('bpenc', () => {
   it('roundtrips a small file', async () => {
     const { key, keyId } = await material()
     const data = patternedBytes(4096)
-    const enc = await encryptFileToBpenc(key, keyId, data, 'photo.png', 'image/png')
+    const enc = await encryptFileToBpenc(key, keyId, sharedSalt, data, 'photo.png', 'image/png')
     expect(peekBpencKeyId(enc)).toBe(keyId)
 
     const out = await decryptBpenc(key, enc)
@@ -229,10 +296,17 @@ describe('bpenc', () => {
   it('roundtrips a >8MB file through the multi-chunk path', async () => {
     const { key, keyId } = await material()
     const data = patternedBytes(9 * 1024 * 1024) // ~9 MB → 2 chunks
-    const enc = await encryptFileToBpenc(key, keyId, data, 'big.bin', 'application/octet-stream')
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      data,
+      'big.bin',
+      'application/octet-stream',
+    )
 
-    // 2 chunks → 2 independent GCM tags, plus the 30-byte prefix and encrypted header.
-    expect(enc.length).toBe(30 + encHeaderLen(enc) + data.length + 2 * 16)
+    // 2 chunks → 2 independent GCM tags, plus the 46-byte prefix and encrypted header.
+    expect(enc.length).toBe(46 + encHeaderLen(enc) + data.length + 2 * 16)
 
     const out = await decryptBpenc(key, enc)
     expect(out.header.chunks).toBe(2)
@@ -244,7 +318,14 @@ describe('bpenc', () => {
   it('roundtrips an exactly-8MB file as a single chunk', async () => {
     const { key, keyId } = await material()
     const data = patternedBytes(CHUNK_SIZE)
-    const enc = await encryptFileToBpenc(key, keyId, data, 'exact.bin', 'application/octet-stream')
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      data,
+      'exact.bin',
+      'application/octet-stream',
+    )
     const out = await decryptBpenc(key, enc)
     expect(out.header.chunks).toBe(1)
     expect(bytesEqual(out.data, data)).toBe(true)
@@ -252,21 +333,64 @@ describe('bpenc', () => {
 
   it('throws on tampered bytes', async () => {
     const { key, keyId } = await material()
-    const enc = await encryptFileToBpenc(key, keyId, patternedBytes(2048), 'a.txt', 'text/plain')
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      patternedBytes(2048),
+      'a.txt',
+      'text/plain',
+    )
     const tamperedData = enc.slice()
     tamperedData[tamperedData.length - 5] ^= 0x01 // flip a bit in a data chunk
     await expect(decryptBpenc(key, tamperedData)).rejects.toThrow()
 
     const tamperedHeader = enc.slice()
-    tamperedHeader[35] ^= 0x01 // flip a bit inside the encrypted header
+    tamperedHeader[51] ^= 0x01 // flip a bit inside the encrypted header (starts at 46)
     await expect(decryptBpenc(key, tamperedHeader)).rejects.toThrow()
   })
 
   it('throws with the wrong key', async () => {
     const { key, keyId } = await material()
     const other = await deriveKeyMaterial('not the passphrase', sharedSalt)
-    const enc = await encryptFileToBpenc(key, keyId, patternedBytes(64), 'a.txt', 'text/plain')
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      patternedBytes(64),
+      'a.txt',
+      'text/plain',
+    )
     await expect(decryptBpenc(other.key, enc)).rejects.toThrow()
+  })
+
+  it('peekBpencSalt returns the salt the container was built with', async () => {
+    const { key, keyId } = await material()
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      patternedBytes(64),
+      'a.txt',
+      'text/plain',
+    )
+    expect(peekBpencSalt(enc)).toBe(sharedSalt)
+
+    // Parity with the web page: keyId + salt are readable without the key.
+    expect(peekBpencSalt(new Uint8Array(0))).toBeNull()
+    expect(peekBpencSalt(new TextEncoder().encode('this is not a bpenc file'))).toBeNull()
+    expect(peekBpencSalt(enc.subarray(0, 29))).toBeNull() // magic + keyId ok, salt truncated
+  })
+
+  it('rejects a malformed salt (BP_BAD_SALT)', async () => {
+    const { key, keyId } = await material()
+    const data = patternedBytes(64)
+    await expect(
+      encryptFileToBpenc(key, keyId, 'short', data, 'a.txt', 'text/plain'),
+    ).rejects.toThrow('BP_BAD_SALT')
+    await expect(
+      encryptFileToBpenc(key, keyId, 'A'.repeat(21) + '+', data, 'a.txt', 'text/plain'),
+    ).rejects.toThrow('BP_BAD_SALT')
   })
 
   it('peekBpencKeyId returns null on garbage', () => {
@@ -320,7 +444,14 @@ describe('bpenc', () => {
 
   it('rejects a header whose size exceeds the remaining container bytes (BP_BAD_HEADER)', async () => {
     const { key, keyId } = await material()
-    const enc = await encryptFileToBpenc(key, keyId, patternedBytes(2048), 'a.bin', 'application/octet-stream')
+    const enc = await encryptFileToBpenc(
+      key,
+      keyId,
+      sharedSalt,
+      patternedBytes(2048),
+      'a.bin',
+      'application/octet-stream',
+    )
     // Chop off part of the data section: header.size (2048) now exceeds the
     // remaining bytes, which the pre-allocation sanity check must catch.
     const truncated = enc.subarray(0, enc.length - 1024)
@@ -334,11 +465,20 @@ async function sha256HexOf(data: Uint8Array): Promise<string> {
   return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** Minimal b64url → bytes, so the hand-rolled container can embed a real salt. */
+function b64urlToBytes(s: string): Uint8Array {
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'))
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
+
 /**
  * Assembles a .bpenc container by hand — same layout as src/crypto/bpenc.ts
- * (magic, keyId, header IV, uint32 BE header length, AES-GCM header, then
- * chunks under IV+1+i) — but with an arbitrary `header` object, so tests can
- * craft hostile headers the real encryptor would never emit.
+ * (magic, keyId, 16 raw salt bytes, header IV, uint32 BE header length,
+ * AES-GCM header, then chunks under IV+1+i) — but with an arbitrary `header`
+ * object, so tests can craft hostile headers the real encryptor would never
+ * emit.
  */
 async function buildContainer(
   key: CryptoKey,
@@ -346,6 +486,7 @@ async function buildContainer(
   header: unknown,
   chunks: Uint8Array[],
 ): Promise<Uint8Array> {
+  const salt = b64urlToBytes(sharedSalt)
   const headerIv = new Uint8Array(12)
   crypto.getRandomValues(headerIv)
   const ivPlus = (n: number) => {
@@ -371,10 +512,12 @@ async function buildContainer(
     )
   }
 
-  const out = new Uint8Array(30 + encHeader.length + encChunks.reduce((n, c) => n + c.length, 0))
+  const out = new Uint8Array(46 + encHeader.length + encChunks.reduce((n, c) => n + c.length, 0))
   let off = 0
   for (const ch of 'BPENC1') out[off++] = ch.charCodeAt(0)
   for (const ch of keyId) out[off++] = ch.charCodeAt(0)
+  out.set(salt, off)
+  off += 16
   out.set(headerIv, off)
   off += 12
   new DataView(out.buffer).setUint32(off, encHeader.length)
@@ -388,7 +531,7 @@ async function buildContainer(
   return out
 }
 
-/** Encrypted-header length as recorded in the container (uint32 BE at bytes 26–29). */
+/** Encrypted-header length as recorded in the container (uint32 BE at bytes 42–45). */
 function encHeaderLen(enc: Uint8Array): number {
-  return new DataView(enc.buffer, enc.byteOffset).getUint32(26)
+  return new DataView(enc.buffer, enc.byteOffset).getUint32(42)
 }

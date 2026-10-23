@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>BetterPrivacy — Privacy, without leaving Discord</title>
 <meta name="description" content="Keep your servers, your friends, your memes. BetterPrivacy encrypts messages and files inside your client — Discord's servers only ever see ciphertext.">
+<meta name="referrer" content="no-referrer">
 <link rel="canonical" href="https://betterprivacy.app/">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
 
@@ -14,9 +15,6 @@
 <meta property="og:description" content="Keep your servers, your friends, your memes. Messages and files encrypt client-side with AES-256-GCM — Discord only ever sees ciphertext.">
 <meta name="twitter:card" content="summary">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..750&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
   :root {
@@ -583,14 +581,27 @@
   footer .top a { color: var(--muted); margin-left: 18px; transition: color 150ms var(--ease); }
   footer .top a:hover { color: var(--text); }
   footer .legal { margin-top: 24px; color: var(--faint); font-size: 12px; line-height: 1.8; max-width: 76ch; }
+
+  /* Immediate feedback and accessible alternatives preserve the original motion. */
+  [hidden] { display: none !important; }
+  a:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--green-text); outline-offset: 5px;
+  }
+  .btn:active, .hbat:active { transform: scale(.97); }
+  .skip { position: fixed; top: -100px; left: 20px; z-index: 100; padding: 12px; background: var(--bg-3); }
+  .skip:focus { top: 16px; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  @media (prefers-reduced-transparency: reduce) { .nav { background: #0b0d10; backdrop-filter: none; } }
+  @media (prefers-contrast: more) { .nav { background: #050505; border-color: #8d949f; } }
 </style>
 </head>
 <body>
+<a class="skip" href="#hero">Skip to content</a>
 
 <nav class="nav">
   <a class="brand" href="#"><span class="tile">🦇</span>BetterPrivacy</a>
   <a class="link" href="#how">How it works</a>
-  <a class="link" href="#coverage">Coverage</a>
+  <a class="link" href="/m/">Open a message</a>
   <a class="link" href="#security">Security</a>
   <a class="link" href="#faq">FAQ</a>
   <a class="nav-dl" href="#install">Download <span class="ico">↓</span></a>
@@ -611,7 +622,7 @@
       </p>
       <div class="hero-ctas">
         <a class="btn btn-green" href="#install">Download the plugin <span class="ico">↓</span></a>
-        <a class="btn btn-quiet" href="#how">How it works</a>
+        <a class="btn btn-quiet" href="/create/">On mobile? Use the web ↗</a>
       </div>
       <ul class="facts">
         <li>
@@ -628,10 +639,10 @@
         </li>
         <li>
           <b>Fails closed</b>
-          <span>If a Discord update breaks hooks, sending blocks — plaintext never leaks.</span>
+          <span>Integration health is visible in the chat bar. A red bat means stop and check.</span>
         </li>
       </ul>
-      <p class="hero-note"><span id="decode">status: send+render+attachments patched · v1.0.0 · 0 servers</span><span class="caret"></span></p>
+      <p class="hero-note"><span id="decode">interactive illustration · v1.0.0 · encryption on your device</span><span class="caret"></span></p>
     </div>
 
     <div class="hero-demo">
@@ -666,7 +677,7 @@
             </div>
             <div class="inputbar">
               <span class="itype" id="itype"></span><span class="icaret"></span><span class="spacer"></span>
-              <button class="bat" id="bat" tabindex="-1">🦇</button>
+              <button class="bat" id="bat" tabindex="-1" aria-label="Illustrated encryption button">🦇</button>
             </div>
 
             <div class="phrase-card" id="phrase-card" hidden>
@@ -680,7 +691,7 @@
             <div class="fxc" id="fxc"></div>
           </div>
         </div>
-        <p class="demo-hint" id="hint">A friend already encrypted #stargazing — you just need the phrase.</p>
+        <p class="demo-hint" id="hint">Animated illustration · a friend encrypted #stargazing — you just need the phrase.</p>
       </div>
     </div>
   </div>
@@ -739,7 +750,7 @@
         </div>
         <div class="state">
           <span class="bp-demo bp-red">🦇</span>
-          <div><b>Red</b><small>Broken by a Discord update. Sending is blocked, never leaked.</small></div>
+          <div><b>Red</b><small>Integration needs attention. Pause and check the warning.</small></div>
         </div>
       </div>
     </div>
@@ -773,8 +784,8 @@
           <p>Each channel has its own key and its own on/off switch. <code>/pt</code> sends a single message in plaintext; <code>/enc</code> picks a specific key. Power features stay in Settings.</p>
         </div>
         <div class="cell">
-          <b>Fails closed, never open</b>
-          <p>If a Discord update breaks message interception, the plugin blocks sending instead of silently leaking plaintext — the 🦇 turns red and says exactly what's wrong.</p>
+          <b>Visible integration health</b>
+          <p>Discord updates can change its internals. The 🦇 turns red when a required integration is unavailable — check the warning before sending anything sensitive.</p>
         </div>
       </div>
     </div>
@@ -797,7 +808,7 @@
       <p class="sec-sub">
         The model is simple — Discord can't read what it never receives. Here are its exact
         edges: passphrase-based symmetric encryption with standard primitives, AES-256-GCM via
-        WebCrypto, PBKDF2-HMAC-SHA256 at 600,000 rounds, reviewed adversarially before release.
+        WebCrypto, PBKDF2-HMAC-SHA256 at 600,000 rounds, with authenticated messages and files. Not independently audited.
       </p>
 
       <div class="honesty">
@@ -864,11 +875,11 @@
       <div class="faq">
         <details>
           <summary>What do people without the plugin see?</summary>
-          <p>A 🦇 followed by a link to this site. Clicking it opens the <a href="/m">decrypt page</a>: the scrambled payload rides in the URL fragment — which browsers never send to any server — and the secret phrase unlocks it right in the browser. Every encrypted message is both unreadable and a signpost to the plugin.</p>
+          <p>A 🦇 followed by a link to this site. Clicking it opens the <a href="/m/">decrypt page</a>: the scrambled payload rides in the URL fragment — which browsers never send to any server — and the secret phrase unlocks it right in the browser. Every encrypted message is both unreadable and a signpost to the plugin.</p>
         </details>
         <details>
           <summary>Do I need an account or a server?</summary>
-          <p>No. There is no backend, no signup, no telemetry. Every cryptographic operation happens inside your Discord client via the WebCrypto API. This website is just a download page.</p>
+          <p>No. There is no backend, no signup, no telemetry. Every cryptographic operation happens inside your Discord client via the WebCrypto API. You can also <a href="/create/">create a message</a> or <a href="/m/">open one in your browser</a>, including on mobile.</p>
         </details>
         <details>
           <summary>What if I forget my phrase?</summary>
@@ -884,7 +895,7 @@
         </details>
         <details>
           <summary>Does it work on mobile?</summary>
-          <p>No. BetterDiscord is a desktop client mod, so BetterPrivacy is desktop-only. Messages received on mobile stay ciphertext and decrypt once you're back at your desk.</p>
+          <p>The plugin runs in desktop Discord. On mobile, open the encrypted link in your browser and enter the phrase — or <a href="/create/">create a message here</a> and share it back to Discord. No mobile installation needed.</p>
         </details>
         <details>
           <summary>Is this against Discord's Terms of Service?</summary>
@@ -892,7 +903,7 @@
         </details>
         <details>
           <summary>Why should I trust the crypto?</summary>
-          <p>Standard primitives, no inventions: AES-256-GCM via WebCrypto, PBKDF2-HMAC-SHA256 key derivation, authenticated chunked file encryption. The wire format is open, and the code went through adversarial security review before release.</p>
+          <p>Standard primitives, no inventions: AES-256-GCM via WebCrypto, PBKDF2-HMAC-SHA256 key derivation, authenticated chunked file encryption. The wire format is open, and encryption runs on your device. The project has not undergone an independent security audit.</p>
         </details>
       </div>
     </div>
@@ -916,6 +927,9 @@
         <a href="#how">How it works</a>
         <a href="#security">Security</a>
         <a href="#install">Install</a>
+        <a href="/create/">Create a message</a>
+        <a href="/m/">Open a message</a>
+        <a href="/terms/">Terms</a>
       </span>
     </div>
     <p class="legal">

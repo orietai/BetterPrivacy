@@ -1,90 +1,87 @@
-# Pre-Launch Review — v1.0.0
+# First public release contract — 1.0.0
 
-Decision log from the product-owner pass before first release. v1.0.0 has no
-released users, so this is the last moment breaking changes are free. Every
-decision below was taken with that window in mind.
+BetterPrivacy has no previous public release. Development messages, containers,
+client workarounds, and draft versions are not migration targets. The shipped
+code implements the contracts below directly, with no previous-version readers
+or configuration migrations.
 
-## D1 — The wire format becomes a real URL
+## Message format
 
-**Finding:** Discord only auto-links text with an `https://` scheme. The
-test-era format (`🦇betterprivacy.app/v1|…`) would **never** have been
-clickable — the "every message advertises us" goal silently didn't work.
-
-**Decision:** The one and only release wire format is:
-
-```
+```text
 🦇<https://betterprivacy.app/m#v1.<keyId>.<salt>.<iv>.<ciphertext>>
 ```
 
-- A real URL → clickable for everyone, in and out of Discord.
-- Wrapped in `<>` → Discord renders a plain clickable link with **no embed
-  card** (no per-message preview spam) and **no crawler fetch** per message.
-- `.` separates fields: it is outside the b64url alphabet and, unlike `|`,
-  never terminates Discord's link detection.
-- Fixed overhead ≈ 84 UTF-16 units; worst-case ASCII plaintext at the 1400
-  cap encodes to ≈ 1972 chars — under Discord's 2000. `encodeWire` still
-  hard-fails with `BP_OVERSIZE` past the limit.
-- Parsing tolerates a stripped `🦇` and/or `<>` (copy/paste, other clients),
-  but rejects mismatched wrappers as mangled.
+- HTTPS URL with its encrypted payload in the fragment.
+- keyId: 6 bytes of SHA-256(raw derived key), base64url (8 characters).
+- Salt: 16 bytes, base64url (22 characters).
+- IV: 12 random bytes, base64url (16 characters).
+- Ciphertext: AES-256-GCM output including its authentication tag, base64url.
+- The bat and angle-bracket wrapper are presentation. Bare links copied from
+  the website use the same v1 envelope and are accepted. Unmatched brackets,
+  other domains, non-HTTPS links, and unknown versions are rejected.
+- Discord sends split plaintext losslessly into 1,360-byte UTF-8 chunks.
+  Each chunk becomes an independent v1 message and remains below 2,000 characters.
+- The browser composer creates one message/link within that same byte budget.
 
-## D2 — The salt rides in the wire
+## Key derivation
 
-The decrypt page receives only the URL. Key derivation needs the salt, which
-was previously reconstructed from the channel label — something the page
-can't know. The salt (16 bytes, 22 chars b64url) is therefore now a wire
-field.
+PBKDF2-HMAC-SHA256 at 600,000 iterations derives 256-bit AES-GCM key material.
+Phrase bytes are used exactly; case and spaces matter. Keys are imported as
+non-extractable CryptoKeys and raw key buffers are cleared after use.
 
-**Security delta: none meaningful.** For channel keys the salt is
-`SHA-256('BetterPrivacy/v1/label-salt:' + 'channel:<id>')[:16]` — derived
-from data every channel member already sees, and stored plaintext in the
-keyring. Carrying it discloses nothing an attacker in scope didn't have;
-phrase strength remains the entire defense (documented in the README threat
-model). Side benefit: recovery and web decryption now work for
-custom-labeled keys too, without knowing the label.
+For channel keys, salt is SHA-256 of
+`BetterPrivacy/v1/label-salt:` plus the trimmed, lowercased channel label,
+truncated to 16 bytes. The browser composer generates a fresh random salt per
+message. Both use the same envelope; recipients derive from the carried salt.
 
-## D3 — No legacy at launch
+Keyring entries and current key export blobs retain salts as part of the
+current contract. They are not migration code. The phrase is not persisted.
+Knowing a phrase exposes all messages protected by its key; choose a long,
+unique phrase and share it separately.
 
-All test-era formats (`🦇betterprivacy.app/v1|…`, `🔐betterprivacy.app/v1|…`,
-`🔐BP1|…`) and the unused `generateSalt()` are **deleted**, not deprecated.
-Messages sent during development become permanently unreadable — acceptable,
-they were ours. The public format is named `v1` because for users it is the
-first format that ever existed.
+## Attachment format
 
-**Versioning policy from here:** the fragment's `v1.` prefix is the format
-version. Post-release rule: parse every format ever released, emit only the
-newest. Breaking parse compatibility after release is not an option.
+Only `BPENC1` with the following layout is supported:
 
-## D4 — The decrypt page (`/m`)
+| Bytes | Field |
+| --- | --- |
+| 0–5 | ASCII magic `BPENC1` |
+| 6–13 | Eight ASCII keyId characters |
+| 14–29 | 16 raw KDF salt bytes |
+| 30–41 | 12-byte header IV |
+| 42–45 | uint32 big-endian encrypted-header length |
+| 46 onward | Encrypted JSON header, then independently authenticated 8 MB chunks |
 
-Static page, no backend, no analytics. The payload lives in the URL
-**fragment**, which browsers never send in HTTP requests — betterprivacy.app
-(and any CDN in front of it) never sees ciphertext, let alone plaintext. All
-crypto runs in the visitor's browser via WebCrypto, mirroring the plugin
-exactly: PBKDF2-HMAC-SHA256 × 600,000 → AES-256-GCM; wrong phrases are
-detected by keyId mismatch before any decrypt attempt.
+The header contains filename, MIME type, plaintext size, SHA-256 checksum,
+and chunk count. Chunk IVs increment the last four header-IV bytes by
+`1 + chunkIndex`. Parsers validate header types, lengths, chunk counts,
+authentication tags, and the final checksum.
 
-Scope for v1: **text messages only.** Encrypted attachments (`.bpenc`) are
-out — fetching Discord CDN URLs from a third-party origin is CORS-blocked,
-and files can be large. The page tells attachment recipients to install the
-plugin instead.
+## Client integration
 
-## Accepted risks
+Target current BetterDiscord APIs:
 
-- **R1 — AutoMod link filters.** Servers with "block links" rules will block
-  wire messages. The send fails visibly (Discord rejects it; nothing leaks —
-  the fail-closed model is unaffected). Accepted for v1; a compact no-link
-  format toggle is on the backlog if reports warrant it.
-- **R2 — Non-Discord unfurlers.** Other chat apps may fetch the URL for a
-  preview; they get the generic OG card (the fragment never leaves the
-  client), so nothing sensitive is exposed.
-- **R3 — Long visible URLs.** Non-plugin users see a long 🦇 link instead of
-  short gibberish. Trade accepted: the link is the distribution channel.
+- `BdApi.Webpack.getWithKey` returns an iterable module/export pair.
+- `BdApi.Net.fetch` downloads encrypted attachments outside renderer CORS.
+- The submit-time validator and current paste-prompt prop are the composer
+  integration points. Removed message-length getter APIs are not probed.
+- Message rendering uses current prop-name markers, not CSS-name source markers.
+- Upload interception reads and replaces `CloudUpload.item.file`.
 
-## Backlog (explicitly deferred, not forgotten)
+DOM rendering paths, lazy-module retries, safe cancellation, and input
+validation remain: these handle current runtime state, not previous releases.
+Missing optional composer patches retain Discord's native limit.
 
-1. Compact no-link wire format as an opt-in setting (AutoMod-hostile servers).
-2. `.bpenc` support on the decrypt page (user drags the downloaded file in).
-3. In-plugin "recover from message" using the wire salt (works for custom
-   labels; today's recover modal only reconstructs channel-labeled keys).
-4. Self-host the two web fonts so the site makes zero third-party requests.
-5. `masterPassphrase` setting is stubbed/disabled — ship or remove in 1.1.
+## Release verification
+
+`npm test` covers v1 wire/container roundtrips, plugin/web crypto parity,
+browser create/share/open flows, malformed input, and current composer gates.
+`npm run typecheck` validates the shared module contracts.
+`npm run build:site` rebuilds the distributable plugin and website download.
+
+Live Discord integration and real mobile-browser rendering still require
+manual verification. Automated checks do not substitute for those checks.
+
+The integrated release run is recorded in [RELEASE-CHECK.md](RELEASE-CHECK.md).
+Use `npm run verify:release` to run checks, rebuild both download copies, and
+verify the static routes/assets and artifact identity in one command.

@@ -24,8 +24,9 @@
 
 import type { KeyEntry, PluginContext } from '../types'
 import { resolveCurrentChannelId } from '../modules'
-import { decryptBpenc, peekBpencKeyId } from '../crypto/bpenc'
-import { openUnlockModal } from '../ui/UnlockModal'
+import { decryptBpenc, peekBpencKeyId, peekBpencSalt } from '../crypto/bpenc'
+import { openRecoverKeyModal, openUnlockModal } from '../ui/UnlockModal'
+import { t } from '../i18n'
 
 /** Keep in sync with RERENDER_EVENT in index.ts (not exported from there). */
 const RERENDER_EVENT = 'bp-rerender'
@@ -135,6 +136,8 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       }
 
       const { header, data } = await decryptBpenc(key, bytes)
+      // A relock/stop during WebCrypto must not repopulate the plaintext cache.
+      if (ctx.session.getKey(keyId) !== key) { setPhase('locked'); return }
       const blob = new Blob([data as unknown as BlobPart], {
         type: header.mime || 'application/octet-stream',
       })
@@ -166,8 +169,8 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       if (typeof url !== 'string' || url.length === 0) throw new Error('attachment has no url')
       // cdn.discordapp.com sends no CORS headers, so a renderer fetch() is
       // blocked by the browser. BdApi.Net.fetch runs in the main process and
-      // is exempt; plain fetch stays as a fallback for old BD versions.
-      const res = BdApi.Net?.fetch ? await BdApi.Net.fetch(url) : await fetch(url)
+      // is exempt. Main-process networking is required by this release.
+      const res = await BdApi.Net.fetch(url)
       if (!res.ok) throw new Error(`CDN fetch failed: HTTP ${res.status}`)
       bytesRef.current = new Uint8Array(await res.arrayBuffer())
       await attemptDecrypt()
@@ -221,7 +224,7 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
   if (!modeOn) {
     return chip(
       'bp-chip-locked',
-      '🔒 Encrypted file — encryption off for this channel (click to enable)',
+      t('att.modeOff'),
       () => {
         try {
           if (gateChannel) {
@@ -245,7 +248,7 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
         return cached.keyId
       }
     })()
-    const title = `Decrypted: ${header?.filename ?? 'file'} (key: ${label})`
+    const title = t('att.decryptedTitle', { filename: header?.filename ?? 'file', label })
 
     let media: any
     if (mime.startsWith('image/')) {
@@ -284,14 +287,14 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
             }
           },
         },
-        `Save decrypted file (${header?.filename ?? 'file'})`,
+        t('att.save', { filename: header?.filename ?? 'file' }),
       )
     }
     return React.createElement('div', { className: 'bp-decrypted-attachment', title }, media)
   }
 
   if (cached?.kind === 'failed') {
-    return chip('bp-failed', '⚠ Decryption failed (tampered or wrong key)')
+    return chip('bp-failed', t('chip.failed'))
   }
 
   const keyId = keyIdRef.current
@@ -304,13 +307,21 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
 
   switch (phaseRef.current) {
     case 'fetching':
-      return chip('', '🔒 Encrypted file — decrypting…')
+      return chip('', t('att.decrypting'))
     case 'unknown':
-      return chip('bp-chip-unknown', `🔒 Encrypted file (unknown key ${keyId ?? '?'})`)
+      return chip('bp-chip-unknown', t('att.unknown', { keyId: keyId ?? '?' }), () => {
+        const bytes = bytesRef.current
+        const salt = bytes ? peekBpencSalt(bytes) : null
+        if (!bytes || !salt || !keyId) return
+        void openRecoverKeyModal(ctx, { keyId, salt }, gateChannel,
+          (key) => decryptBpenc(key, bytes)).then((ok) => {
+            if (ok) void attemptDecrypt()
+          }).catch(() => {})
+      })
     case 'locked':
       return chip(
         'bp-chip-locked',
-        `🔒 Encrypted file (key: ${entry?.label ?? keyId ?? '?'}) — click to unlock`,
+        t('att.locked', { label: entry?.label ?? keyId ?? '?' }),
         () => {
           if (!entry) return
           openUnlockModal(ctx, entry)
@@ -323,19 +334,19 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
         },
       )
     case 'fetchFailed':
-      return chip('bp-chip-error', '🔒 Encrypted file — download failed (click to retry)', () => {
+      return chip('bp-chip-error', t('att.fetchFailed'), () => {
         void fetchAndDecrypt()
       })
     default: {
       if (oversize) {
         const mb = (size / (1024 * 1024)).toFixed(1)
-        return chip('bp-chip-oversize', `🔒 Encrypted file (${mb} MB) — Download & decrypt`, () => {
+        return chip('bp-chip-oversize', t('att.oversize', { mb }), () => {
           void fetchAndDecrypt()
         })
       }
       // Belt-and-braces: this chip should be transient (the auto effect picks
       // idle up), but if it ever sticks, a click resets and re-kicks it.
-      return chip('', '🔒 Encrypted file', () => {
+      return chip('', t('att.plain'), () => {
         phaseRef.current = 'idle'
         keyIdRef.current = null
         bump()

@@ -80,32 +80,39 @@ A **key entry**: `{ id: keyId, label: string, salt: b64, scope: 'global' | chann
 
 ## 5. Wire Format
 
-Outgoing encrypted message body (fits Discord's 2000-char limit; document ~33% base64 overhead + header ≈ max ~1400 plaintext chars; reject longer with a toast):
+Outgoing encrypted message body (must fit Discord's 2000-char limit; ~33% base64 overhead + header). Because ciphertext is bigger than plaintext, one wire message holds a **per-part budget of 1360 plaintext bytes measured in UTF-8** (`CHUNK_UTF8_BYTES` — bytes, not UTF-16 units: multi-byte text inflates through UTF-8 → ciphertext → base64url). Longer plaintext is **split, not rejected**: `chunkPlaintext()` cuts it into as many parts as it needs — no cap (lossless, never splitting a surrogate pair, preferring a break just after the last whitespace once past 60% of the budget). Each part is encrypted to its own complete wire message, and the parts are sent sequentially — each awaited before the next — so they arrive in order. Recipients need no multipart support: each part decrypts independently and renders as its own message. Past `CONFIRM_PARTS_THRESHOLD` = 10 parts, `send.ts` asks once before any crypto runs ("this will be N separate encrypted messages — send them all?"); declining sends nothing. `patches/composerLimit.ts` raises the composer's own character ceiling while the focused channel is encrypted, so long text actually reaches the splitter instead of being blocked by the chat box. `encodeWire` still hard-fails with `BP_OVERSIZE` as the definitive per-part guard:
 
 ```
-🔐BP1|<keyId>|<iv_b64url>|<ciphertext_b64url>
+🦇<https://betterprivacy.app/m#v1.<keyId>.<salt_b64url>.<iv_b64url>.<ciphertext_b64url>>
 ```
 
-- `🔐BP1` = magic + version. Parser must ignore malformed candidates silently (regular messages containing the emoji must not break).
-- Detection regex anchored at message start: `/^🔐BP1\|([A-Za-z0-9_-]{8})\|([A-Za-z0-9_-]{16})\|([A-Za-z0-9_-]+)$/`.
-- Version byte allows BP2 later (e.g., chunked/multipart or compressed payloads).
+- The payload **is a real URL**, so Discord linkifies it and anyone without the plugin can click through to the decrypt page; the `<>` wrapper suppresses the embed card. `.` separates fields because it is outside the base64url alphabet and, unlike `|`, never terminates Discord's link detection. See PRE-LAUNCH-REVIEW.md D1.
+- The salt rides along so betterprivacy.app/m can re-derive the key from the phrase alone, with no keyring and no channel context (D2).
+- Everything after `#` is a URL fragment, which browsers never send to any server — the site cannot see ciphertext even in its own logs.
+- Parser must ignore malformed candidates silently (regular messages containing 🦇 or links must not break). Detection regex anchored at message start, tolerating a stripped 🦇 and/or `<>` from copy/paste but rejecting a mismatched wrapper.
+- `v1` in the fragment carries the version; a future `v2` can change the payload while `parseWire` keeps accepting every released format (D3). Note that **multipart is deliberately not a format concern** — long messages are split into several ordinary wire messages (above), so there is no part header, no group id, and no reassembly state.
 
 **Encrypted file format (`.bpenc`)** — for images and any attachment:
 
 ```
 bytes 0–5   : magic "BPENC1"
-bytes 6–13  : keyId (8 bytes raw)
-bytes 14–25 : IV (12 bytes)
-bytes 26–29 : header length N (uint32 BE)
-bytes 30–.. : AES-GCM(header JSON, N bytes)  // {filename, mime, size, sha256}
-remainder   : AES-GCM(file bytes)            // separate IV = header IV + 1 (counter-distinct)
+bytes 6–13  : keyId (8 ASCII chars of the b64url keyId string)
+bytes 14–29 : KDF salt (16 raw bytes — the keyring entry's salt)
+bytes 30–41 : header IV (12 random bytes)
+bytes 42–45 : header length N (uint32 BE)
+bytes 46–.. : AES-GCM(header JSON, N bytes)  // {filename, mime, size, sha256, chunks}
+remainder   : data chunks — plaintext cut at 8 MB; chunk i is its own AES-GCM
+              stream (own 16-byte tag) with IV = header IV + (1 + i) as a
+              big-endian counter on the last 4 bytes
 ```
 
-Uploaded to Discord as `<random-8-chars>.bpenc` so the true filename and type are hidden. Real filename/mime live inside the encrypted header. Files ≥ ~64 MB or above the user's Discord upload cap are rejected with a toast. Encrypt/decrypt of large files runs in a chunked loop (8 MB chunks, each with derived per-chunk IV) to avoid blocking the renderer — workers: use one AES-GCM stream per chunk and store chunk count in the header.
+Fixed prefix = 46 bytes. The **salt is carried in the clear** for the same reason it rides in the message wire format: it is key-derivation metadata derived from public data, not a secret, and carrying it lets `betterprivacy.app/m` derive the key from the phrase alone and decrypt a `.bpenc` file the visitor drops on the page. `encryptFileToBpenc(key, keyId, saltB64, data, filename, mime)` validates the salt as 22 b64url chars decoding to 16 bytes (`BP_BAD_SALT`); `peekBpencKeyId()` / `peekBpencSalt()` read the two clear fields without a key.
+
+Uploaded to Discord as `<random-8-chars>.bpenc` so the true filename and type are hidden. Real filename/mime live inside the encrypted header, and the plaintext `sha256` is verified after decryption. Files ≥ ~64 MB or above the user's Discord upload cap are rejected with a toast. Encrypt/decrypt of large files runs in a chunked loop (8 MB chunks, each with derived per-chunk IV) to avoid blocking the renderer — one AES-GCM stream per chunk, chunk count stored in the header.
 
 ## 6. Message Pipelines
 
-**Send (`patches/send.ts`):** `Patcher.before` on `MessageActions.sendMessage(channelId, message, ...)`. If encrypt-mode is ON for that channel and an active key is unlocked: replace `message.content` with wire format. If active key is locked → open UnlockModal, abort send until unlocked (never silently send plaintext). Slash-style prefix override: a message starting with `/pt ` sends plaintext once; `/enc <label> message` encrypts one message with a specific key (case: *user A sends another message with a different key*).
+**Send (`patches/send.ts`):** `Patcher.instead` on `MessageActions.sendMessage(channelId, message, ...)` — `before` cannot cancel a send, and cancellation is load-bearing here (never silently send plaintext). If encrypt-mode is ON for that channel and an active key is unlocked: replace `message.content` with wire format. If active key is locked → open UnlockModal, abort send until unlocked (never silently send plaintext). Slash-style prefix override: a message starting with `/pt ` sends plaintext once; `/enc <label> message` encrypts one message with a specific key (case: *user A sends another message with a different key*).
 
 **Receive/render (`patches/render.ts`):** `Patcher.after` on the message content component's render (locate via Webpack; fall back to `Dispatcher` MESSAGE_CREATE pre-processing only for detection, never store mutation). For each message matching the wire regex:
 
@@ -119,7 +126,7 @@ Handle edits (re-parse on editTimestamp change) and the sender's own optimistic 
 
 **Rich content rendering:** decrypted plaintext is NOT rendered as a plain span — it is fed through Discord's own markdown parser module (locate via Webpack: the `parse`/`parseTopic` markdown module). This makes every text-level feature work inside encrypted messages for free: **bold/italic/underline/strikethrough, `inline code`, fenced code blocks with syntax highlighting, blockquotes, spoiler tags `||…||`, headings/lists, unicode emoji, custom emoji syntax `<:name:id>` and `<a:name:id>`, mention syntax `<@id>/<#id>/<@&id>`, and links.** The parsed React tree is then wrapped in the `.bp-decrypted` container for the indicator styling. Caveats to document: mentions inside encrypted text render correctly but never trigger server-side notifications (the server never saw them); links never generate Discord embeds/link-previews (privacy win — optional client-side preview toggle, default off, since fetching the URL leaks it to that site).
 
-**Encrypted attachments — send (`patches/upload.ts`):** `Patcher.before` on Discord's `CloudUpload` (or the addFiles action feeding it). When encrypt-mode is ON: read the `File`, produce the `.bpenc` blob per §5, swap it in before upload. Toast confirms "attachment encrypted with <label>". `/pt` skips encryption for that message's files too.
+**Encrypted attachments — send (`patches/upload.ts`):** `Patcher.instead` on Discord's `CloudUpload` (or the addFiles action feeding it). When encrypt-mode is ON: read the `File`, produce the `.bpenc` blob per §5, swap it in before upload. Toast confirms "attachment encrypted with <label>". `/pt` skips encryption for that message's files too.
 
 **Encrypted attachments — receive (`patches/attachments.ts`):** `Patcher.after` on the attachment/media component render. For `.bpenc` attachments: render a locked chip (`🔒 Encrypted file — key <label|keyId>`). If key unlocked → auto-fetch (respecting a max auto-download size, default 25 MB), decrypt in memory, and by decrypted mime: images/gif → inline `<img>` from `URL.createObjectURL` (revoked on re-lock/unload); video/audio → inline player from blob URL; anything else → "Save decrypted file" button showing the true filename. Blob URLs and decrypted buffers are part of `decryptCache` — purged on lockdown/timeout exactly like text. Locked/unknown key → chip stays, with unlock/import affordances mirroring §6 text behavior.
 
@@ -149,7 +156,7 @@ State machine per the two modes:
 | B2 | B imports K2 blob + passphrase mid-session | K2 messages decrypt immediately on re-render, no reload |
 | L1 | Lockdown ON, B switches #XY → #general → back | All previously decrypted messages show locked; passphrase re-entry restores them |
 | L2 | Lockdown OFF, timeout 3h (test with 1min override) | Messages stay decrypted across channel switches; after timeout, re-lock + toast |
-| S1 | Non-plugin user views channel | Sees raw `🔐BP1|…` text / a `.bpenc` file; nothing breaks for them |
+| S1 | Non-plugin user views channel | Sees a 🦇 link / a `.bpenc` file; nothing breaks for them, and either one opens at betterprivacy.app/m with the phrase |
 | S2 | Tampered ciphertext (flip a char) | Renders decryption-failed warning, no crash |
 | S3 | Plugin stop/restart | No plaintext, decrypted blobs, or derived keys persisted anywhere on disk |
 | R1 | A sends encrypted msg containing code block, custom emoji, spoiler, @mention | B (unlocked) sees syntax-highlighted code, rendered emoji, working spoiler, styled mention — identical to native rendering plus indicator |

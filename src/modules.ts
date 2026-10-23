@@ -70,11 +70,54 @@ function src(value: any): string {
   }
 }
 
+/**
+ * Discord's submit-time message-length VALIDATOR — the function the chat bar
+ * awaits before it hands anything to MessageActions.sendMessage, and the sole
+ * thing that produces the "message too long" alert / Nitro upsell.
+ *
+ * WHY BY SOURCE STRING: the module exports it under a webpack-mangled key
+ * (`i` in the 2026-08 build, `n.d(t,{i:()=>S})`), so no prop-name filter can
+ * find it. Two literals inside the function body survive minification because
+ * they are DATA, not identifiers — the analytics label 'Message Too Long
+ * Alert' and the dispatch action type 'MESSAGE_LENGTH_UPSELL'. In the audited
+ * build 'Message Too Long Alert' occurs exactly once in the entire renderer
+ * bundle, and the pair occurs in exactly one function, so this is a precise
+ * match rather than a heuristic one.
+ *
+ * Returns `{ module, method }` — the module RECORD plus the mangled key — so
+ * composerLimit.ts has a named, function-valued property to Patcher.instead.
+ *
+ * OPTIONAL BY DESIGN: a miss must
+ * never reach `failed` or the degraded-startup toast.
+ */
+export function resolveMessageLengthValidator(): { module: any; method: string } | null {
+  const Webpack = BdApi?.Webpack
+  if (!Webpack || typeof Webpack.getModule !== 'function') return null
+
+  const isValidator = (value: any): boolean => {
+    if (typeof value !== 'function') return false
+    const s = src(value)
+    return s.includes('Message Too Long Alert') && s.includes('MESSAGE_LENGTH_UPSELL')
+  }
+
+  // Current BetterDiscord returns an iterable [module record, export key].
+  try {
+    const pair = Array.from(Webpack.getWithKey(isValidator) as Iterable<any>)
+    const [module, method] = pair
+    if (module && typeof method === 'string' && isValidator(module[method])) {
+      return { module, method }
+    }
+  } catch {
+    // Missing/lazy validator: retain the native composer limit.
+  }
+  return null
+}
+
 export function resolveModules(): DiscordModules {
   const failed: string[] = []
   const Webpack = BdApi?.Webpack
 
-  // If BdApi.Webpack itself is missing (catastrophically old/broken BD host),
+  // If BdApi.Webpack is unavailable,
   // report every lookup as failed rather than throwing.
   if (!Webpack) {
     return {
@@ -161,44 +204,28 @@ export function resolveModules(): DiscordModules {
 
   // --- Component lookups (HIGH churn risk — inherently fragile) -------------
 
-  // Message content component. Verified against a live 2026-07 build via a
-  // React-fiber probe: exported as memo(fn) under a minified key, and the
-  // inner function destructures {className, message, children, content,
-  // onUpdate, contentRef, compact}. Those PROP-NAME literals survive
-  // minification (they're object keys), unlike the old 'messageContent'
-  // class-name marker, which now lives only in CSS-mapping modules and never
-  // appears in component source. Wrapper shapes probed: memo(fn) → 'type',
-  // memo(forwardRef(fn)) → 'render', bare fn → its export key. Normalized to
-  // { module, method } so render.ts always has a concrete, function-valued
-  // property to Patcher.after.
+  // Message content is identified by prop names that survive minification.
+  // Normalize current React wrapper shapes to a patchable { module, method }.
   const MessageContent = resolve(failed, 'MessageContent', () => {
     const srcHasAll = (v: any, needles: string[]): boolean => {
       if (typeof v !== 'function') return false
       const s = src(v)
       return needles.every((n) => s.includes(n))
     }
-    // Current builds: prop-key markers. Legacy (< 2026) builds: inline
-    // 'messageContent' class literal. Tried in that order.
-    const probes: Array<(v: any) => boolean> = [
-      (v) => srcHasAll(v, ['contentRef', 'onUpdate', 'compact', 'message']),
-      (v) => srcHasAll(v, ['messageContent']),
-    ]
-    for (const probe of probes) {
-      const memoLike = Webpack.getModule(
-        (x: any) => Boolean(x?.type) && (probe(x.type) || probe(x.type?.render) || probe(x.type?.type)),
-        { searchExports: true },
-      )
-      if (memoLike) {
-        if (probe(memoLike.type)) return { module: memoLike, method: 'type' }
-        if (probe(memoLike.type?.render)) return { module: memoLike.type, method: 'render' }
-        if (probe(memoLike.type?.type)) return { module: memoLike.type, method: 'type' }
-      }
-      // Bare function export: getWithKey hands back the export holder so a
-      // named property exists to patch.
-      const withKey = Webpack.getWithKey?.((x: any) => probe(x))
-      if (Array.isArray(withKey) && withKey[0] && typeof withKey[1] === 'string') {
-        return { module: withKey[0], method: withKey[1] }
-      }
+    const probe = (v: any): boolean => srcHasAll(v, ['contentRef', 'onUpdate', 'compact', 'message'])
+    const memoLike = Webpack.getModule(
+      (x: any) => Boolean(x?.type) && (probe(x.type) || probe(x.type?.render) || probe(x.type?.type)),
+      { searchExports: true },
+    )
+    if (memoLike) {
+      if (probe(memoLike.type)) return { module: memoLike, method: 'type' }
+      if (probe(memoLike.type?.render)) return { module: memoLike.type, method: 'render' }
+      if (probe(memoLike.type?.type)) return { module: memoLike.type, method: 'type' }
+    }
+    // Name the export through BetterDiscord's current iterable API.
+    const [module, method] = Array.from(Webpack.getWithKey(probe) as Iterable<any>)
+    if (module && typeof method === 'string' && probe(module[method])) {
+      return { module, method }
     }
     return null
   })

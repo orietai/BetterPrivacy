@@ -51,9 +51,7 @@ export function applyChannelSwitchPatch(ctx: PluginContext): void {
     }
   }
 
-  // Subscribing to an action type Discord never dispatches (e.g. THREAD_SELECT
-  // on older clients) is a harmless no-op for a Flux dispatcher, so both are
-  // registered unconditionally rather than feature-detected up front.
+  // Track both channel and thread focus events.
   dispatcher.subscribe(CHANNEL_SELECT, handleSelect)
   dispatcher.subscribe(THREAD_SELECT, handleSelect)
 

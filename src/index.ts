@@ -13,6 +13,7 @@ import { createSession } from './core/session'
 import { createDecryptCache } from './core/decryptCache'
 import { resolveModules } from './modules'
 import { applySendPatch } from './patches/send'
+import { applyComposerLimitPatch } from './patches/composerLimit'
 import { applyRenderPatch } from './patches/render'
 import { applyUploadPatch } from './patches/upload'
 import { applyAttachmentsPatch } from './patches/attachments'
@@ -21,6 +22,7 @@ import { applyContextMenuPatches } from './patches/contextMenu'
 import { applyChatBarPatch } from './ui/ChatBarControls'
 import { buildSettingsPanel } from './ui/KeyManagerPanel'
 import { injectStyles, removeStyles } from './ui/indicators'
+import { initI18n, t } from './i18n'
 
 /** Name of the global DOM event dispatched by ctx.forceRerender(). */
 const RERENDER_EVENT = 'bp-rerender'
@@ -33,6 +35,11 @@ const RERENDER_EVENT = 'bp-rerender'
 const PATCH_STEPS: ReadonlyArray<{ name: string; apply: (ctx: PluginContext) => void }> = [
   { name: 'injectStyles', apply: injectStyles },
   { name: 'applySendPatch', apply: applySendPatch },
+  // Immediately after the send patch: it reads the send patch's health to
+  // decide whether raising the composer limit is safe. Absent from
+  // RETRYABLE_PATCHES on purpose — it runs its own quiet retries and never
+  // writes to modules.failed.
+  { name: 'applyComposerLimitPatch', apply: applyComposerLimitPatch },
   { name: 'applyRenderPatch', apply: applyRenderPatch },
   { name: 'applyUploadPatch', apply: applyUploadPatch },
   { name: 'applyAttachmentsPatch', apply: applyAttachmentsPatch },
@@ -77,13 +84,13 @@ export function friendlyFailureNames(failed: string[]): string[] {
   const out: string[] = []
   for (const raw of failed) {
     let name: string
-    if (raw.includes('send') || raw.includes('MessageActions')) name = 'sending'
-    else if (raw.includes('render') || raw.includes('MessageContent')) name = 'message display'
-    else if (raw.includes('upload') || raw.includes('CloudUpload')) name = 'file upload'
-    else if (raw.includes('attachments') || raw.includes('AttachmentComponent')) name = 'file display'
-    else if (raw.includes('chatBar') || raw.includes('ChannelTextArea')) name = 'chat-bar controls'
-    else if (raw.includes('channelSwitch') || raw.includes('Dispatcher')) name = 'lockdown & channel tracking'
-    else if (raw.includes('MarkdownParser')) name = 'rich text'
+    if (raw.includes('send') || raw.includes('MessageActions')) name = t('feat.sending')
+    else if (raw.includes('render') || raw.includes('MessageContent')) name = t('feat.display')
+    else if (raw.includes('upload') || raw.includes('CloudUpload')) name = t('feat.upload')
+    else if (raw.includes('attachments') || raw.includes('AttachmentComponent')) name = t('feat.fileDisplay')
+    else if (raw.includes('chatBar') || raw.includes('ChannelTextArea')) name = t('feat.chatBar')
+    else if (raw.includes('channelSwitch') || raw.includes('Dispatcher')) name = t('feat.lockdown')
+    else if (raw.includes('MarkdownParser')) name = t('feat.richText')
     else name = raw
     if (!out.includes(name)) out.push(name)
   }
@@ -149,7 +156,7 @@ function scheduleLookupRetries(ctx: PluginContext): void {
       const recovered = before.filter((f) => !failed.includes(f))
       if (recovered.length > 0) {
         BdApi.UI.showToast(
-          `BetterPrivacy: recovered after Discord finished loading: ${friendlyFailureNames(recovered).join(', ')}`,
+          t('app.recovered', { list: friendlyFailureNames(recovered).join(', ') }),
           { type: 'success' },
         )
         ctx.forceRerender()
@@ -176,6 +183,7 @@ export default class BetterPrivacy {
 
   start(): void {
     const settings = createSettingsStore()
+    initI18n(settings)
     const keyring = createKeyring()
     const session = createSession(keyring, settings)
     const cache = createDecryptCache(settings)
@@ -235,7 +243,7 @@ export default class BetterPrivacy {
 
     if (modules.failed.length > 0) {
       BdApi.UI.showToast(
-        `BetterPrivacy degraded — affected: ${friendlyFailureNames(modules.failed).join(', ')}. Retrying in the background.`,
+        t('app.degraded', { list: friendlyFailureNames(modules.failed).join(', ') }),
         { type: 'warning' },
       )
       scheduleLookupRetries(ctx)

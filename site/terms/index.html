@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms — BetterPrivacy</title>
+<meta name="description" content="The terms for using BetterPrivacy, an independent MIT-licensed BetterDiscord encryption plugin: no warranty, no liability, and the risks — Discord's rules, unrecoverable phrases, breakable software — stated plainly.">
+<link rel="canonical" href="https://betterprivacy.app/terms">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
+
+
+<style>
+  :root {
+    --bg: #050505;
+    --line: rgba(235, 240, 248, 0.08);
+    --text: #edeff2;
+    --muted: #8d949f;
+    --faint: #545b66;
+    --green: #3ba55d;
+    --green-text: #5abc7c;
+    --sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ease: ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+    display: flex; flex-direction: column;
+  }
+
+  /* film grain */
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 90; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.03;
+  }
+
+  ::selection { background: rgba(59, 165, 93, 0.3); }
+  a { color: var(--green-text); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header { padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 650; font-size: 14px; color: var(--text); }
+  .brand:hover { text-decoration: none; }
+  .brand .tile {
+    width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center;
+    font-size: 13px; background: rgba(59, 165, 93, 0.14);
+    box-shadow: inset 0 0 0 1px var(--green);
+  }
+
+  /* language switcher — quiet, terminal-like */
+  .langs { display: flex; align-items: center; gap: 1px; }
+  .langs button {
+    background: none; border: none; border-radius: 0;
+    padding: 4px 6px; font: 500 11px var(--mono); color: var(--faint);
+    cursor: pointer; transition: color 150ms var(--ease);
+  }
+  .langs button:hover { color: var(--muted); }
+  .langs button.on { color: var(--green-text); }
+  .langs .sep { font: 500 11px var(--mono); color: var(--faint); opacity: 0.45; }
+
+  /* a single readable column — this is a document, not a pitch */
+  main { flex: 1; padding: 64px 24px 96px; }
+  .doc { width: min(720px, 100%); margin: 0 auto; }
+
+  h1 { font-size: 28px; font-weight: 650; letter-spacing: -0.028em; line-height: 1.15; }
+  .meta {
+    margin-top: 10px; font-family: var(--mono); font-size: 11.5px;
+    letter-spacing: 0.04em; color: var(--faint);
+  }
+
+  .sec { margin-top: 44px; }
+  .sec:first-of-type { margin-top: 56px; padding-top: 34px; border-top: 1px solid var(--line); }
+  .sec .n {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em;
+    color: var(--green-text); opacity: 0.75;
+  }
+  .sec h2 { margin-top: 7px; font-size: 17px; font-weight: 620; letter-spacing: -0.016em; color: var(--text); }
+  .sec p { margin-top: 11px; color: var(--muted); font-size: 15px; line-height: 1.75; }
+
+  @media (max-width: 520px) {
+    main { padding: 44px 22px 72px; }
+    h1 { font-size: 25px; }
+    .sec { margin-top: 38px; }
+  }
+
+  footer { padding: 20px 24px 26px; text-align: center; font-size: 11.5px; color: var(--faint); font-family: var(--mono); }
+</style>
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/tools-skin.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="/"><span class="tile">🦇</span>BetterPrivacy</a>
+  <nav class="site-nav"><a href="/create/" data-copy="createNav">Create a message</a><a href="/m/" data-copy="openNav">Open a message</a><div class="langs" id="langs">
+    <button type="button" data-lang="en">EN</button>
+    <span class="sep">·</span>
+    <button type="button" data-lang="tr">TR</button>
+    <span class="sep">·</span>
+    <button type="button" data-lang="ru">RU</button>
+  </div></nav>
+</header>
+
+<main>
+  <article class="doc">
+    <h1 data-i18n="h1">Terms of Service</h1>
+    <p class="meta" data-i18n="meta">v1.0.0 · effective 2026-08-18</p>
+
+    <section class="sec">
+      <p class="n">01</p>
+      <h2 data-i18n="s1.h">What this is</h2>
+      <p data-i18n="s1.p">BetterPrivacy is a free, open-source BetterDiscord plugin that encrypts Discord messages and files on your device, plus this website, which hosts the plugin and a client-side decrypt page. By downloading, installing, or using either, you accept these terms. If you don't accept them, don't use it.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">02</p>
+      <h2 data-i18n="s2.h">An independent project</h2>
+      <p data-i18n="s2.p">BetterPrivacy is not affiliated with, endorsed by, or connected to Discord Inc. or the BetterDiscord project. "Discord" is a trademark of Discord Inc.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">03</p>
+      <h2 data-i18n="s3.h">It breaks Discord's rules</h2>
+      <p data-i18n="s3.p">Client modifications — including BetterDiscord, and therefore BetterPrivacy — violate Discord's Terms of Service. Discord can suspend or terminate accounts for it, at any time, without warning. That risk is entirely yours. Don't use it on an account you can't afford to lose.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">04</p>
+      <h2 data-i18n="s4.h">No warranty</h2>
+      <p data-i18n="s4.p">The plugin and the website are provided "as is" and "as available", without warranty of any kind, express or implied — including fitness for a particular purpose, non-infringement, and uninterrupted or error-free operation. Encryption software can contain defects. A Discord update can break the plugin at any moment.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">05</p>
+      <h2 data-i18n="s5.h">No liability</h2>
+      <p data-i18n="s5.p">To the maximum extent permitted by law, the author and contributors are liable for nothing arising from your use of — or inability to use — the plugin or the website: not for lost, corrupted, undeliverable or exposed messages and files; not for suspended or banned accounts; not for disclosed secrets; not for damages of any kind, direct, indirect, incidental, consequential or otherwise, even if advised of the possibility. Your entire remedy is to stop using the software.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">06</p>
+      <h2 data-i18n="s6.h">Security is a bet, not a promise</h2>
+      <p data-i18n="s6.p">BetterPrivacy uses standard cryptography (AES-256-GCM, PBKDF2), but no software makes data unbreakable. The secret phrase is the entire protection: a weak, reused or carelessly shared phrase undoes everything. Anyone who has the phrase can read everything encrypted with it, forever. A forgotten phrase is unrecoverable — by design, nobody can restore it, including us.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">07</p>
+      <h2 data-i18n="s7.h">Your responsibilities</h2>
+      <p data-i18n="s7.p">You choose the phrases and who receives them. You are responsible for complying with the laws that apply to you — including laws restricting encryption, which differ by country — and for what you encrypt and send. Don't use BetterPrivacy for anything illegal.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">08</p>
+      <h2 data-i18n="s8.h">The website</h2>
+      <p data-i18n="s8.p">betterprivacy.app has no accounts, no analytics, and no server-side decryption; encrypted payloads travel in the URL fragment, which browsers do not send to servers. Even so, the site comes with no availability guarantee and may change or disappear at any time.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">09</p>
+      <h2 data-i18n="s9.h">Open source</h2>
+      <p data-i18n="s9.p">The code is licensed under the MIT License. These terms govern your use of the software and the site; the license governs the code. Where they conflict about the code, the license wins.</p>
+    </section>
+
+    <section class="sec">
+      <p class="n">10</p>
+      <h2 data-i18n="s10.h">Changes</h2>
+      <p data-i18n="s10.p">These terms may change with any release. The version published here is the one that applies. Continuing to use the plugin after a change means you accept it.</p>
+    </section>
+  </article>
+</main>
+
+<footer class="site-footer"><span>🦇 BetterPrivacy</span><nav><a href="/" data-copy="home">Home</a><a href="/create/" data-copy="createNav">Create a message</a><a href="/m/" data-copy="openNav">Open a message</a></nav></footer>
+
+<script>
+  // ── strings ────────────────────────────────────────────────────────────────
+  // Same mechanism as /m: one dictionary per language, data-i18n swaps
+  // textContent. Section numbers (01–10) are typographic furniture, not prose,
+  // so they stay identical in every language.
+  var I18N = {
+    en: {
+      'h1': 'Terms of Service',
+      'meta': 'v1.0.0 · effective 2026-08-18',
+
+      's1.h': 'What this is',
+      's1.p': 'BetterPrivacy is a free, open-source BetterDiscord plugin that encrypts Discord messages and files on your device, plus this website, which hosts the plugin and a client-side decrypt page. By downloading, installing, or using either, you accept these terms. If you don\'t accept them, don\'t use it.',
+
+      's2.h': 'An independent project',
+      's2.p': 'BetterPrivacy is not affiliated with, endorsed by, or connected to Discord Inc. or the BetterDiscord project. "Discord" is a trademark of Discord Inc.',
+
+      's3.h': 'It breaks Discord\'s rules',
+      's3.p': 'Client modifications — including BetterDiscord, and therefore BetterPrivacy — violate Discord\'s Terms of Service. Discord can suspend or terminate accounts for it, at any time, without warning. That risk is entirely yours. Don\'t use it on an account you can\'t afford to lose.',
+
+      's4.h': 'No warranty',
+      's4.p': 'The plugin and the website are provided "as is" and "as available", without warranty of any kind, express or implied — including fitness for a particular purpose, non-infringement, and uninterrupted or error-free operation. Encryption software can contain defects. A Discord update can break the plugin at any moment.',
+
+      's5.h': 'No liability',
+      's5.p': 'To the maximum extent permitted by law, the author and contributors are liable for nothing arising from your use of — or inability to use — the plugin or the website: not for lost, corrupted, undeliverable or exposed messages and files; not for suspended or banned accounts; not for disclosed secrets; not for damages of any kind, direct, indirect, incidental, consequential or otherwise, even if advised of the possibility. Your entire remedy is to stop using the software.',
+
+      's6.h': 'Security is a bet, not a promise',
+      's6.p': 'BetterPrivacy uses standard cryptography (AES-256-GCM, PBKDF2), but no software makes data unbreakable. The secret phrase is the entire protection: a weak, reused or carelessly shared phrase undoes everything. Anyone who has the phrase can read everything encrypted with it, forever. A forgotten phrase is unrecoverable — by design, nobody can restore it, including us.',
+
+      's7.h': 'Your responsibilities',
+      's7.p': 'You choose the phrases and who receives them. You are responsible for complying with the laws that apply to you — including laws restricting encryption, which differ by country — and for what you encrypt and send. Don\'t use BetterPrivacy for anything illegal.',
+
+      's8.h': 'The website',
+      's8.p': 'betterprivacy.app has no accounts, no analytics, and no server-side decryption; encrypted payloads travel in the URL fragment, which browsers do not send to servers. Even so, the site comes with no availability guarantee and may change or disappear at any time.',
+
+      's9.h': 'Open source',
+      's9.p': 'The code is licensed under the MIT License. These terms govern your use of the software and the site; the license governs the code. Where they conflict about the code, the license wins.',
+
+      's10.h': 'Changes',
+      's10.p': 'These terms may change with any release. The version published here is the one that applies. Continuing to use the plugin after a change means you accept it.',
+
+      'footer': '🦇 betterprivacy.app · client-side end-to-end encryption for Discord'
+    },
+    tr: {
+      'h1': 'Kullanım Şartları',
+      'meta': 'v1.0.0 · yürürlük 2026-08-18',
+
+      's1.h': 'Bunun ne olduğu',
+      's1.p': 'BetterPrivacy, Discord mesajlarını ve dosyalarını kendi cihazında şifreleyen ücretsiz, açık kaynaklı bir BetterDiscord eklentisi ve eklentiyi barındırıp tarayıcı içinde çözme sayfası sunan bu web sitesidir. İkisinden birini indirerek, kurarak ya da kullanarak bu şartları kabul etmiş olursun. Kabul etmiyorsan kullanma.',
+
+      's2.h': 'Bağımsız bir proje',
+      's2.p': 'BetterPrivacy; Discord Inc. ya da BetterDiscord projesiyle bağlantılı değildir, onlar tarafından desteklenmez ve onaylanmaz. "Discord", Discord Inc.\'in ticari markasıdır.',
+
+      's3.h': 'Discord\'un kurallarını ihlal eder',
+      's3.p': 'İstemci değişiklikleri — BetterDiscord ve dolayısıyla BetterPrivacy dahil — Discord\'un Hizmet Şartları\'nı ihlal eder. Discord bu nedenle hesapları her an, uyarmadan askıya alabilir ya da kapatabilir. Bu risk tamamen sana aittir. Kaybetmeyi göze alamayacağın bir hesapta kullanma.',
+
+      's4.h': 'Garanti yok',
+      's4.p': 'Eklenti ve site "olduğu gibi" ve "mevcut haliyle" sunulur; açık ya da örtülü hiçbir garanti verilmez — belirli bir amaca uygunluk, ihlal etmeme, kesintisiz ya da hatasız çalışma dahil. Şifreleme yazılımlarında kusur olabilir. Bir Discord güncellemesi eklentiyi her an bozabilir.',
+
+      's5.h': 'Sorumluluk yok',
+      's5.p': 'Yasaların izin verdiği en geniş ölçüde, yazar ve katkıda bulunanlar eklentiyi ya da siteyi kullanmandan — ya da kullanamamandan — doğan hiçbir şeyden sorumlu değildir: kaybolan, bozulan, iletilemeyen ya da ifşa olan mesajlar ve dosyalardan; askıya alınan ya da kapatılan hesaplardan; açığa çıkan sırlardan; doğrudan, dolaylı, arızi, netice kabilinden ya da başka her türlü zarardan — olasılığı önceden bildirilmiş olsa bile. Tek çözüm yolun yazılımı kullanmayı bırakmaktır.',
+
+      's6.h': 'Güvenlik bir vaat değildir',
+      's6.p': 'BetterPrivacy standart kriptografi kullanır (AES-256-GCM, PBKDF2) ama hiçbir yazılım veriyi kırılamaz yapmaz. Gizli ifade korumanın tamamıdır: zayıf, başka yerde kullanılmış ya da özensizce paylaşılmış bir ifade her şeyi geçersiz kılar. İfadeyi bilen herkes, onunla şifrelenmiş her şeyi sonsuza dek okuyabilir. Unutulan ifade geri getirilemez — tasarım gereği bunu kimse yapamaz, biz dahil.',
+
+      's7.h': 'Senin sorumlulukların',
+      's7.p': 'İfadeleri sen seçersin, kime verdiğine sen karar verirsin. Sana uygulanan yasalara uymak — ülkeden ülkeye değişen şifreleme kısıtlamaları dahil — ve neyi şifreleyip gönderdiğin senin sorumluluğundadır. BetterPrivacy\'yi yasa dışı hiçbir şey için kullanma.',
+
+      's8.h': 'Web sitesi',
+      's8.p': 'betterprivacy.app\'te hesap, analitik ve sunucu tarafı çözme yoktur; şifreli veri, tarayıcıların sunuculara göndermediği URL parçasında taşınır. Yine de site hiçbir erişilebilirlik garantisi olmadan sunulur; her an değişebilir ya da kapanabilir.',
+
+      's9.h': 'Açık kaynak',
+      's9.p': 'Kod, MIT Lisansı ile lisanslıdır. Bu şartlar yazılımın ve sitenin kullanımını, lisans ise kodu düzenler. Kod konusunda çelişirlerse lisans geçerlidir.',
+
+      's10.h': 'Değişiklikler',
+      's10.p': 'Bu şartlar herhangi bir sürümle değişebilir. Burada yayımlanan sürüm geçerlidir. Değişiklikten sonra eklentiyi kullanmaya devam etmek, değişikliği kabul ettiğin anlamına gelir.',
+
+      'footer': '🦇 betterprivacy.app · Discord için istemci tarafı uçtan uca şifreleme'
+    },
+    ru: {
+      'h1': 'Условия использования',
+      'meta': 'v1.0.0 · действует с 2026-08-18',
+
+      's1.h': 'Что это такое',
+      's1.p': 'BetterPrivacy — бесплатный плагин BetterDiscord с открытым исходным кодом, который шифрует сообщения и файлы Discord прямо на вашем устройстве, плюс этот сайт, где лежит плагин и страница расшифровки, работающая целиком в браузере. Загружая, устанавливая или используя любое из двух, вы принимаете эти условия. Не принимаете — не пользуйтесь.',
+
+      's2.h': 'Независимый проект',
+      's2.p': 'BetterPrivacy не связан с Discord Inc. или проектом BetterDiscord, не одобрен и не поддерживается ими. «Discord» — товарный знак Discord Inc.',
+
+      's3.h': 'Это нарушает правила Discord',
+      's3.p': 'Модификации клиента — включая BetterDiscord, а значит и BetterPrivacy — нарушают условия обслуживания Discord. Discord может за это заблокировать или удалить аккаунт в любой момент и без предупреждения. Этот риск целиком ваш. Не используйте плагин на аккаунте, потерю которого не готовы пережить.',
+
+      's4.h': 'Без гарантий',
+      's4.p': 'Плагин и сайт предоставляются «как есть» и «как доступны», без каких-либо гарантий, явных или подразумеваемых, — включая пригодность для конкретной цели, ненарушение прав и бесперебойную или безошибочную работу. В программах для шифрования бывают дефекты. Обновление Discord может сломать плагин в любой момент.',
+
+      's5.h': 'Без ответственности',
+      's5.p': 'В максимальной степени, допустимой законом, автор и участники проекта ни за что не несут ответственности в связи с использованием — или невозможностью использования — плагина или сайта: ни за потерянные, повреждённые, недоставленные или раскрытые сообщения и файлы; ни за заблокированные или удалённые аккаунты; ни за раскрытые секреты; ни за какой бы то ни было ущерб — прямой, косвенный, случайный, последующий или любой иной, — даже если о его возможности было известно заранее. Единственное доступное средство защиты — перестать пользоваться программой.',
+
+      's6.h': 'Безопасность — это ставка, а не обещание',
+      's6.p': 'BetterPrivacy использует стандартную криптографию (AES-256-GCM, PBKDF2), но ни одна программа не делает данные невзламываемыми. Секретная фраза — это вся защита: слабая, использованная где-то ещё или небрежно переданная фраза сводит её на нет. Любой, у кого есть фраза, сможет прочитать всё зашифрованное ею — навсегда. Забытую фразу не восстановить: так задумано, этого не может сделать никто, включая нас.',
+
+      's7.h': 'Ваша ответственность',
+      's7.p': 'Фразы выбираете вы, и кому их передать — тоже вы. Соблюдение применимых к вам законов — включая ограничения на шифрование, которые в разных странах разные — и всё, что вы шифруете и отправляете, остаётся вашей ответственностью. Не используйте BetterPrivacy ни для чего противозаконного.',
+
+      's8.h': 'Сайт',
+      's8.p': 'На betterprivacy.app нет аккаунтов, нет аналитики и нет расшифровки на сервере; зашифрованные данные едут во фрагменте URL, который браузеры не отправляют на серверы. И всё же сайт работает без каких-либо гарантий доступности и может измениться или исчезнуть в любой момент.',
+
+      's9.h': 'Открытый исходный код',
+      's9.p': 'Код распространяется по лицензии MIT. Эти условия регулируют использование программы и сайта, лицензия — сам код. Если в отношении кода они расходятся, действует лицензия.',
+
+      's10.h': 'Изменения',
+      's10.p': 'Эти условия могут меняться с любым выпуском. Действует та версия, что опубликована здесь. Продолжая пользоваться плагином после изменения, вы принимаете его.',
+
+      'footer': '🦇 betterprivacy.app · сквозное шифрование для Discord на стороне клиента'
+    }
+  }
+
+  // ── language ───────────────────────────────────────────────────────────────
+  var lang = 'en'
+  function t(key) {
+    var dict = I18N[lang] || I18N.en
+    var s = dict[key]
+    if (typeof s !== 'string') s = I18N.en[key]
+    return typeof s === 'string' ? s : ''
+  }
+
+  function applyLang(code) {
+    if (!I18N[code]) code = 'en'
+    lang = code
+    document.documentElement.lang = code
+    try { localStorage.setItem('bp-lang', code) } catch (_) {}
+
+    var nodes = document.querySelectorAll('[data-i18n]')
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'))
+
+    var btns = document.querySelectorAll('#langs button')
+    for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('on', btns[k].getAttribute('data-lang') === code)
+  }
+
+  function initialLang() {
+    var saved = null
+    try { saved = localStorage.getItem('bp-lang') } catch (_) {}
+    if (saved && I18N[saved]) return saved
+    var nav = (navigator.language || '').toLowerCase()
+    if (/^tr/.test(nav)) return 'tr'
+    if (/^ru/.test(nav)) return 'ru'
+    return 'en'
+  }
+
+  document.getElementById('langs').addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('button[data-lang]') : null
+    if (btn) applyLang(btn.getAttribute('data-lang'))
+  })
+
+  applyLang(initialLang())
+</script>
+
+<script src="/assets/site.js"></script>
+</body>
+</html>

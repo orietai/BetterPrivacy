@@ -16,26 +16,23 @@
 
 import type { KeyEntry, PluginContext } from '../types'
 import { encryptText } from '../crypto/cipher'
-import { encodeWire, MAX_PLAINTEXT_CHARS } from '../crypto/wire'
+import { chunkPlaintext, encodeWire, DISCORD_MESSAGE_LIMIT } from '../crypto/wire'
+import { t } from '../i18n'
 import { openUnlockModal } from '../ui/UnlockModal'
 
 const PT_PREFIX = '/pt '
 const ENC_REGEX = /^\/enc\s+(\S+)\s+([\s\S]+)$/
 
 /**
- * Holds the channel id of a '/pt '-prefixed send while it is passing through,
- * so the upload patch can skip encrypting attachments belonging to the same
- * send — and ONLY that channel's attachments (a process-global boolean had a
- * cross-channel race window). Best-effort coordination: cleared on the next
- * macrotask (uploads for the same message are queued within the current
- * tick). Attachment-only sends that never hit sendMessage can't observe this
- * flag — documented limitation.
+ * Above this many parts, one enter-press turns into enough messages to be
+ * worth asking about — so a huge accidental paste can't fire off a wall of
+ * messages unchallenged. Everything typeable in a native composer stays
+ * frictionless: even 4000 CJK characters (the Nitro ceiling) is ~12000 UTF-8
+ * bytes ≈ 9 parts, under the threshold. Only genuinely huge pastes — which
+ * are only reachable at all because composerLimit.ts raises the composer's
+ * allowance — see the confirmation.
  */
-let plaintextOverrideChannelId: string | null = null
-
-export function isPlaintextOverrideActive(channelId: string | null): boolean {
-  return channelId !== null && channelId === plaintextOverrideChannelId
-}
+const CONFIRM_PARTS_THRESHOLD = 10
 
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
@@ -61,11 +58,61 @@ function hasStickers(message: any, extraArgs: any[]): boolean {
 }
 
 /**
- * Encrypts `plaintext` with `key`, rewrites message.content to wire format and
- * forwards to the original sendMessage. Any failure (oversize, crypto error)
- * cancels the send with a toast — never falls back to plaintext.
+ * "This will be {n} messages — send them all?". Resolves false on cancel and
+ * on ANY other close (Escape, backdrop) and if the modal can't be opened at
+ * all: the default is always NOT sending, because the cost of an unwanted
+ * wall of messages is higher than the cost of a re-press.
+ */
+function confirmManyParts(n: number): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+    const settle = (v: boolean): void => {
+      if (settled) return
+      settled = true
+      resolve(v)
+    }
+    try {
+      BdApi.UI.showConfirmationModal(t('send.confirmTitle'), t('send.confirmParts', { n }), {
+        confirmText: t('send.confirmSend'),
+        cancelText: t('common.cancel'),
+        // onConfirm settles first; the close callback that follows is a no-op
+        // thanks to `settled`.
+        onConfirm: () => settle(true),
+        onCancel: () => settle(false),
+        onCloseCallback: () => settle(false),
+      })
+    } catch (err) {
+      console.error('[BetterPrivacy] could not open the long-message confirmation', err)
+      settle(false)
+    }
+  })
+}
+
+/**
+ * A sendMessage result that RESOLVED but reports failure: Discord's message
+ * action resolves API errors as `{ ok: false, ... }` on many builds instead
+ * of rejecting. Treat both shapes as a failed part.
+ */
+function sendResultFailed(res: any): boolean {
+  return res != null && typeof res === 'object' && res.ok === false
+}
+
+/**
+ * Encrypts `plaintext` with `key` and forwards to the original sendMessage —
+ * auto-splitting into as many wire messages as the text needs when it doesn't
+ * fit one (each part is its own complete wire message; recipients decrypt them
+ * independently). There is no part cap: past CONFIRM_PARTS_THRESHOLD parts the
+ * user is asked once, and a decline sends nothing. Any failure (crypto error,
+ * part rejected) cancels the send with a toast — never falls back to plaintext.
+ *
+ * Multi-part ordering: every part is awaited before the next is sent, so the
+ * server receives them in order. All parts are encrypted UP FRONT — if any
+ * chunk fails to encrypt, nothing is sent at all. A part that fails to SEND
+ * (network, slowmode, AutoMod) cancels the remaining parts with a toast
+ * naming which part died; the already-sent parts stand.
  */
 function encryptThenSend(
+  ctx: PluginContext,
   key: CryptoKey,
   entry: KeyEntry,
   plaintext: string,
@@ -75,31 +122,91 @@ function encryptThenSend(
   original: (...a: any[]) => any,
 ): Promise<any> {
   return (async () => {
-    if (plaintext.length > MAX_PLAINTEXT_CHARS) {
-      toast(
-        `BetterPrivacy: message too long to encrypt (max ${MAX_PLAINTEXT_CHARS} characters) — send cancelled`,
-        'error',
-      )
+    const stillUnlocked = (): boolean => ctx.session.getKey(entry.id) === key && !!ctx.keyring.get(entry.id)
+    let chunks: string[]
+    try {
+      chunks = chunkPlaintext(plaintext)
+    } catch (err) {
+      // chunkPlaintext is total and unbounded — a throw means an internal
+      // fault, so fail closed rather than send anything.
+      console.error('[BetterPrivacy] chunking failed, send cancelled', err)
+      toast(t('send.encryptFailed'), 'error')
       return undefined
     }
+
+    // Ask BEFORE doing any crypto: declining should cost nothing.
+    if (chunks.length > CONFIRM_PARTS_THRESHOLD) {
+      const confirmed = await confirmManyParts(chunks.length)
+      if (!confirmed) {
+        toast(t('send.declined'), 'info')
+        return undefined
+      }
+    }
+
+    let wires: string[]
     try {
-      const { iv, ct } = await encryptText(key, plaintext)
-      // encodeWire throws Error('BP_OVERSIZE') if the wire string exceeds 2000 chars.
-      const wire = encodeWire({ keyId: entry.id, salt: entry.salt, iv, ciphertext: ct })
-      message.content = wire
-      return Reflect.apply(original, thisObj, args)
+      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      wires = []
+      for (const chunk of chunks) {
+        const { iv, ct } = await encryptText(key, chunk)
+        // encodeWire throws Error('BP_OVERSIZE') if a wire string exceeds 2000 chars.
+        wires.push(encodeWire({ keyId: entry.id, salt: entry.salt, iv, ciphertext: ct }))
+      }
     } catch (err: any) {
       if (err?.message === 'BP_OVERSIZE') {
-        toast(
-          'BetterPrivacy: encrypted message exceeds the 2000-character limit — send cancelled',
-          'error',
-        )
+        toast(t('send.oversize'), 'error')
       } else {
         console.error('[BetterPrivacy] encryption failed, send cancelled', err)
-        toast('BetterPrivacy: encryption failed — send cancelled', 'error')
+        toast(t('send.encryptFailed'), 'error')
       }
       return undefined
     }
+
+    // Single part: the common case — rewrite in place, forward untouched args
+    // (preserves reply references and whatever options Discord attached).
+    const firstArgs = [...args]
+    firstArgs[1] = { ...message, content: wires[0]! }
+    if (wires.length === 1) {
+      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      try {
+        const result = await Reflect.apply(original, thisObj, firstArgs)
+        if (sendResultFailed(result)) toast(t('send.partFailed', { i: 1, n: 1 }), 'error')
+        return result
+      } catch (err) {
+        console.error('[BetterPrivacy] encrypted message failed to send', err)
+        toast(t('send.partFailed', { i: 1, n: 1 }), 'error')
+        return undefined
+      }
+    }
+
+    // Multi-part: part 1 keeps the original args; follow-ups are minimal
+    // fresh message objects (no reply reference duplication, no stickers).
+    toast(t('send.sendingParts', { n: wires.length }), 'info')
+    const channelId = args[0]
+    for (let i = 0; i < wires.length; i++) {
+      if (!stillUnlocked()) { toast(t('send.cancelledLocked'), 'warning'); return undefined }
+      const partArgs =
+        i === 0
+          ? firstArgs
+          : [
+              channelId,
+              {
+                content: wires[i]!,
+                tts: false,
+                invalidEmojis: [],
+                validNonShortcutEmojis: [],
+              },
+            ]
+      try {
+        const res = await Promise.resolve(Reflect.apply(original, thisObj, partArgs))
+        if (sendResultFailed(res)) throw new Error('BP_PART_SEND_FAILED')
+      } catch (err) {
+        console.error(`[BetterPrivacy] part ${i + 1}/${wires.length} failed to send`, err)
+        toast(t('send.partFailed', { i: i + 1, n: wires.length }), 'error')
+        return undefined
+      }
+    }
+    return undefined
   })()
 }
 
@@ -132,17 +239,19 @@ export function applySendPatch(ctx: PluginContext): void {
 
         // ---- 1) '/pt ' prefix: strip and send plaintext once -----------------
         if (content === '/pt' || content.startsWith(PT_PREFIX)) {
-          message.content = content === '/pt' ? '' : content.slice(PT_PREFIX.length)
-          plaintextOverrideChannelId = channelId
-          try {
-            return passthrough()
-          } finally {
-            // Macrotask delay so uploads queued by this same send still see the
-            // override (see isPlaintextOverrideActive doc comment).
-            setTimeout(() => {
-              plaintextOverrideChannelId = null
-            }, 0)
+          const stripped = content === '/pt' ? '' : content.slice(PT_PREFIX.length)
+          // Reachable only because composerLimit.ts raises the composer's
+          // allowance while encrypt mode is on. '/pt ' is a passthrough —
+          // nothing splits it — so an over-long one would be rejected
+          // server-side with a Discord error the user can't make sense of.
+          // Cancel here instead, counting CODE POINTS the way Discord's own
+          // limit does (astral characters count once, not twice).
+          if ([...stripped].length > DISCORD_MESSAGE_LIMIT) {
+            toast(t('send.ptTooLong'), 'error')
+            return Promise.resolve()
           }
+          message.content = stripped
+          return passthrough()
         }
 
         // ---- 2) '/enc <label> <message>': one-off explicit key ---------------
@@ -153,7 +262,7 @@ export function applySendPatch(ctx: PluginContext): void {
           if (!match) {
             // Malformed /enc almost certainly intended encryption — cancel
             // rather than risk sending the literal text.
-            toast('BetterPrivacy: usage — /enc <key label> <message>. Send cancelled.', 'error')
+            toast(t('send.encUsage'), 'error')
             return Promise.resolve()
           }
           const label = match[1]!
@@ -162,26 +271,26 @@ export function applySendPatch(ctx: PluginContext): void {
             .list()
             .find((e) => e.label.toLowerCase() === label.toLowerCase())
           if (!entry) {
-            toast(`BetterPrivacy: no key labelled "${label}" — send cancelled`, 'error')
+            toast(t('send.noKeyLabelled', { label }), 'error')
             return Promise.resolve()
           }
           const key = ctx.session.getKey(entry.id)
           if (!key) {
-            toast(`BetterPrivacy: key "${entry.label}" is locked — unlock it first. Send cancelled.`, 'error')
+            toast(t('send.keyLocked', { label: entry.label }), 'error')
             return Promise.resolve()
           }
           if (hasStickers(message, args.slice(2))) {
-            toast("BetterPrivacy: stickers can't be encrypted — send cancelled", 'error')
+            toast(t('send.stickers'), 'error')
             return Promise.resolve()
           }
-          return encryptThenSend(key, entry, plaintext, message, thisObj, args, original)
+          return encryptThenSend(ctx, key, entry, plaintext, message, thisObj, args, original)
         }
 
         // ---- 3) Encrypt mode ON for this channel ------------------------------
         if (ctx.keyring.isEncryptModeOn(channelId)) {
           // Stickers are server-side objects and can't carry ciphertext (spec §12).
           if (hasStickers(message, args.slice(2))) {
-            toast("BetterPrivacy: stickers can't be encrypted — send cancelled", 'error')
+            toast(t('send.stickers'), 'error')
             return Promise.resolve()
           }
 
@@ -198,19 +307,16 @@ export function applySendPatch(ctx: PluginContext): void {
             if (available.length === 1) {
               entry = available[0]!
               ctx.keyring.setActiveSendKey(channelId, entry.id)
-              toast(`BetterPrivacy: using key "${entry.label}"`, 'info')
+              toast(t('send.usingKey', { label: entry.label }), 'info')
             } else {
-              toast(
-                'BetterPrivacy: no key selected — pick one from the 🦇 dropdown next to the lock button. Send cancelled.',
-                'warning',
-              )
+              toast(t('send.noKeySelected'), 'warning')
               return Promise.resolve()
             }
           }
 
           const key = ctx.session.getKey(entry.id)
           if (key) {
-            return encryptThenSend(key, entry, content, message, thisObj, args, original)
+            return encryptThenSend(ctx, key, entry, content, message, thisObj, args, original)
           }
 
           // Active key is locked: prompt to unlock, then send or drop. NEVER
@@ -224,10 +330,10 @@ export function applySendPatch(ctx: PluginContext): void {
             }
             const unlockedKey = unlockedOk ? ctx.session.getKey(entry.id) : null
             if (!unlockedKey) {
-              toast('BetterPrivacy: send cancelled — key locked', 'warning')
+              toast(t('send.cancelledLocked'), 'warning')
               return undefined
             }
-            return encryptThenSend(unlockedKey, entry, content, message, thisObj, args, original)
+            return encryptThenSend(ctx, unlockedKey, entry, content, message, thisObj, args, original)
           })()
         }
 
@@ -237,17 +343,8 @@ export function applySendPatch(ctx: PluginContext): void {
         // Fail SAFE: if anything above blew up while encrypt mode is on, cancel
         // the send rather than risk leaking plaintext.
         console.error('[BetterPrivacy] send patch error', err)
-        try {
-          const channelId: unknown = args?.[0]
-          if (typeof channelId === 'string' && ctx.keyring.isEncryptModeOn(channelId)) {
-            toast('BetterPrivacy: internal error — message NOT sent', 'error')
-            return Promise.resolve()
-          }
-        } catch {
-          // Even the fail-safe check failed; fall through to passthrough below
-          // (encrypt-mode state unknowable, blocking all sends would brick chat).
-        }
-        return passthrough()
+        toast(t('send.internalError'), 'error')
+        return Promise.resolve()
       }
     },
   )

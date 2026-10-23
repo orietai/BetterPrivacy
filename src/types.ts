@@ -9,7 +9,10 @@
  * ============================================================================
  * MODULE EXPORT CONTRACT (exact export names; src/index.ts imports these)
  * ============================================================================
- *  crypto/kdf.ts     : generateSalt(): string                                  // 16 random bytes, b64url
+ *  crypto/kdf.ts     : deriveSaltFromLabel(label: string): Promise<string>
+ *                      // Deterministic 16-byte salt: SHA-256('BetterPrivacy/v1/label-salt:' +
+ *                      // trimmed, lowercased label)[:16], b64url. Label + passphrase therefore
+ *                      // fully determine the key — no stored salt needed to recover it.
  *                      deriveKeyMaterial(passphrase: string, saltB64: string): Promise<DerivedKeyMaterial>
  *                      // PBKDF2-HMAC-SHA256, 600_000 iterations -> 256-bit AES-GCM key.
  *                      // Derive bits first, compute keyId (first 6 bytes of SHA-256(raw bits),
@@ -21,22 +24,42 @@
  *  crypto/cipher.ts  : encryptText(key: CryptoKey, plaintext: string): Promise<{ iv: string; ct: string }>  // b64url, 12-byte random IV
  *                      decryptText(key: CryptoKey, ivB64: string, ctB64: string): Promise<string>           // throws on GCM auth failure
  *  crypto/wire.ts    : WIRE_REGEX: RegExp        // 🦇<https://betterprivacy.app/m#v1.keyId.salt.iv.ct> — sole format
- *                      MAX_PLAINTEXT_CHARS: number  // ~1400, chosen so the wire message fits 2000 chars
+ *                      CHUNK_UTF8_BYTES: number  // 1360 — per-chunk plaintext budget in UTF-8 BYTES
+ *                      DISCORD_MESSAGE_LIMIT: number  // 2000 — Discord's own per-message ceiling
+ *                      chunkPlaintext(text: string): string[]
+ *                      // Lossless split (concatenation reproduces the input), never splits a
+ *                      // surrogate pair, prefers breaking just after whitespace. UNBOUNDED —
+ *                      // no part cap, never throws; the many-parts confirmation lives in
+ *                      // send.ts.
  *                      encodeWire(p: WireParts): string
  *                      parseWire(content: string): WireParts | null   // silently null on malformed
- *  crypto/bpenc.ts   : encryptFileToBpenc(key: CryptoKey, keyId: string, data: Uint8Array, filename: string, mime: string): Promise<Uint8Array>
+ *  crypto/bpenc.ts   : encryptFileToBpenc(key: CryptoKey, keyId: string, saltB64: string, data: Uint8Array, filename: string, mime: string): Promise<Uint8Array>
  *                      peekBpencKeyId(bytes: Uint8Array): string | null   // reads magic + keyId field only
+ *                      peekBpencSalt(bytes: Uint8Array): string | null    // the salt field, b64url (22 chars)
  *                      decryptBpenc(key: CryptoKey, bytes: Uint8Array): Promise<{ header: BpencHeader; data: Uint8Array }>
  *                      // Format per spec §5. NOTE: the 8-byte keyId field stores the 8 ASCII
- *                      // chars of the b64url keyId string. Header IV = bytes 14–25; each data
- *                      // chunk (8 MB) uses IV = header IV + 1 + chunkIndex (big-endian counter
- *                      // increment on the last 4 bytes). header JSON: BpencHeader (incl. chunks).
+ *                      // chars of the b64url keyId string. KDF salt = 16 RAW bytes at 14–29
+ *                      // (key-derivation metadata, not a secret — it lets betterprivacy.app/m
+ *                      // decrypt from the phrase alone); header IV = bytes 30–41; encrypted-
+ *                      // header length (uint32 BE) = bytes 42–45; each data chunk (8 MB) uses
+ *                      // IV = header IV + 1 + chunkIndex (big-endian counter increment on the
+ *                      // last 4 bytes). header JSON: BpencHeader (incl. chunks).
  *  core/keyring.ts   : createKeyring(): Keyring
  *  core/session.ts   : createSession(keyring: Keyring, settings: SettingsStore): Session
  *  core/decryptCache.ts : createDecryptCache(settings: SettingsStore): DecryptCache
  *  settings.ts       : createSettingsStore(): SettingsStore ; DEFAULT_SETTINGS: SettingsData
  *  modules.ts        : resolveModules(): DiscordModules
+ *                      resolveMessageLengthValidator(): { module, method } | null
+ *                      // Discord's submit-time "message too long" gate — the PRIMARY composer
+ *                      // limit target on current builds. Optional; re-probed by
+ *                      // composerLimit.ts's retries, never lands on `failed`.
  *  patches/send.ts   : applySendPatch(ctx: PluginContext): void
+ *  patches/composerLimit.ts : applyComposerLimitPatch(ctx: PluginContext): void
+ *                      // Lets long text reach send.ts's splitter while the focused channel is
+ *                      // encrypted, past BOTH of Discord's composer gates: the submit-time
+ *                      // message-length VALIDATOR (re-run with truncated content, so its other
+ *                      // checks still apply), and the ChannelTextArea `uploadPromptCharacterCount` prop that
+ *                      // turns a big PASTE into a message.txt attachment.
  *  patches/render.ts : applyRenderPatch(ctx: PluginContext): void
  *  patches/upload.ts : applyUploadPatch(ctx: PluginContext): void
  *  patches/attachments.ts : applyAttachmentsPatch(ctx: PluginContext): void
@@ -105,6 +128,8 @@ export interface Keyring {
   /** Entries whose scope is 'global' or matches the channel (or DM peer) id. */
   forChannel(channelId: string): KeyEntry[]
   create(label: string, passphrase: string, scope: Scope): Promise<KeyEntry>
+  /** Recover a v1 envelope's key; authenticate the payload before persisting any entry. */
+  recover(label: string, passphrase: string, metadata: { keyId: string; salt: string }, scope: Scope, authenticate: (key: CryptoKey) => Promise<unknown>): Promise<KeyEntry>
   /** Parses `betterprivacy-key:<b64(json{label,salt,check})>`; verifies passphrase against KCV; throws Error with user-readable message on failure. */
   importBlob(blob: string, passphrase: string, scope?: Scope): Promise<KeyEntry>
   exportBlob(id: string): string
@@ -119,6 +144,8 @@ export interface Keyring {
 export type RelockReason = 'manual' | 'lockdown' | 'timeout' | 'stop'
 
 export interface Session {
+  /** Changes on locking/navigation/stop; async setup must not unlock after a newer lock action. */
+  readonly revision: number
   /** Derives from passphrase, verifies KCV; on success holds the CryptoKey in memory. */
   unlock(entry: KeyEntry, passphrase: string): Promise<boolean>
   /** Returns the unlocked CryptoKey or null; touches lastUsedAt on hit. */
@@ -160,6 +187,8 @@ export interface SettingsData {
   maxAutoDownloadBytes: number // default 25 * 1024 * 1024
   memoryBudgetMB: number // default 200
   clientLinkPreviews: boolean // default false
+  /** UI language for the plugin's own strings; 'auto' follows Discord's locale. */
+  language: 'auto' | 'en' | 'tr' | 'ru' // default 'auto'
 }
 
 export interface SettingsStore {

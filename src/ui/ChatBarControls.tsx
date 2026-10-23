@@ -21,6 +21,7 @@ import { PLUGIN_NAME, type PluginContext } from '../types'
 import { resolveCurrentChannelId } from '../modules'
 import { openChannelPhraseModal, openUnlockModal } from './UnlockModal'
 import { friendlyKeyLabel } from './labels'
+import { t } from '../i18n'
 
 /** Must match RERENDER_EVENT in index.ts (ctx.forceRerender broadcast). */
 const RERENDER_EVENT = 'bp-rerender'
@@ -101,10 +102,10 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
   // go out PLAINTEXT no matter what the button says — surface that instead of
   // rendering a reassuring green bat.
   const sendBroken = ctx.modules.failed.some(
-    (f) => f.includes('send') || f.includes('MessageActions'),
+    (f) => /send|MessageActions|upload|CloudUpload/i.test(f),
   )
   // The channel's key: the explicit active one, else the first applicable key
-  // (auto-adopted on first use so old keyrings keep working without a picker).
+  // (auto-adopted on first use so one applicable key needs no picker).
   const activeKeyId = channelId ? ctx.keyring.getActiveSendKey(channelId) : null
   let activeEntry = activeKeyId ? ctx.keyring.get(activeKeyId) : undefined
   if (!activeEntry && channelId) activeEntry = ctx.keyring.forChannel(channelId)[0]
@@ -112,7 +113,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
 
   const noChannelToast = (): void => {
     console.warn(`[${PLUGIN_NAME}] cannot resolve the focused channel (SelectedChannelStore + URL both failed)`)
-    toast('BetterPrivacy: cannot determine the current channel — try switching channels once', 'error')
+    toast(t('bar.noChannel'), 'error')
   }
 
   const refresh = (): void => {
@@ -127,10 +128,13 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
    */
   const onBatClick = (): void => {
     if (sendBroken) {
-      toast(
-        'BetterPrivacy: encryption unavailable — message interception is broken (messages would send as PLAINTEXT)',
-        'error',
-      )
+      if (channelId && encOn) {
+        ctx.keyring.setEncryptMode(channelId, false)
+        toast(t('bar.encPaused'), 'info')
+        refresh()
+        return
+      }
+      toast(t('bar.broken'), 'error')
       return
     }
     if (!channelId) {
@@ -154,10 +158,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
       return
     }
     ctx.keyring.setEncryptMode(channelId, !encOn)
-    toast(
-      !encOn ? '🦇 Encryption ON for this channel' : 'BetterPrivacy: encryption paused for this channel',
-      !encOn ? 'success' : 'info',
-    )
+    toast(!encOn ? t('bar.encOn') : t('bar.encPaused'), !encOn ? 'success' : 'info')
     // Encrypt mode also gates message/attachment display (render.ts /
     // attachments.ts) — broadcast so the visible message list flips too.
     refresh()
@@ -177,12 +178,11 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
     if (!activeEntry) return
     const entry = activeEntry
     BdApi.UI.showConfirmationModal(
-      '🦇 Forget key',
-      `Forget ${friendlyKeyLabel(entry)} (${entry.id})? ` +
-        'Nothing is lost forever — entering the same phrase again restores it exactly.',
+      t('bar.forgetTitle'),
+      t('bar.forgetBody', { label: friendlyKeyLabel(entry), id: entry.id }),
       {
-        confirmText: 'Forget',
-        cancelText: 'Cancel',
+        confirmText: t('common.forget'),
+        cancelText: t('common.cancel'),
         danger: true,
         onConfirm: () => {
           try {
@@ -190,10 +190,10 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
             // purged (via the onRelock wiring), then drop the keyring entry.
             ctx.session.lockKey(entry.id)
             ctx.keyring.remove(entry.id)
-            toast('BetterPrivacy: key forgotten', 'info')
+            toast(t('bar.forgotten'), 'info')
           } catch (err) {
             console.error(`[${PLUGIN_NAME}] key removal failed`, err)
-            toast('BetterPrivacy: could not forget the key', 'error')
+            toast(t('bar.forgetFailed'), 'error')
           }
           refresh()
         },
@@ -205,7 +205,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
     setOpen(false)
     try {
       ctx.session.lockAll('manual')
-      toast('🦇 Everything locked', 'info')
+      toast(t('bar.lockedAll'), 'info')
     } catch (err) {
       console.error(`[${PLUGIN_NAME}] lock-all failed`, err)
     }
@@ -231,16 +231,16 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
           ? ' bp-on'
           : ''
   const title = sendBroken
-    ? 'BetterPrivacy: encryption unavailable (Discord update broke message interception) — messages would send as PLAINTEXT'
+    ? t('bar.title.broken')
     : !channelId
-      ? 'BetterPrivacy: cannot determine the current channel'
+      ? t('bar.title.noChannel')
       : !activeEntry
-        ? 'BetterPrivacy: not encrypted — click to set a secret phrase for this channel'
+        ? t('bar.title.noKey')
         : !unlocked
-          ? 'BetterPrivacy: locked — click to enter the phrase'
+          ? t('bar.title.locked')
           : encOn
-            ? 'BetterPrivacy: encrypted — click to pause · right-click for options'
-            : 'BetterPrivacy: encryption paused — click to resume · right-click for options'
+            ? t('bar.title.on')
+            : t('bar.title.paused')
 
   return (
     <div className="bp-chatbar-controls" ref={rootRef} onMouseDown={guardMouse}>
@@ -279,16 +279,16 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
         }
       : { zIndex: 3000 }
     const status = sendBroken
-      ? '⚠ Encryption broken (Discord update)'
+      ? t('menu.status.broken')
       : !channelId
-        ? '⚠ Cannot determine current channel'
+        ? t('menu.status.noChannel')
         : !activeEntry
-          ? 'This channel is not encrypted'
+          ? t('menu.status.notEncrypted')
           : !unlocked
-            ? 'Phrase needed — click the 🦇 to enter it'
+            ? t('menu.status.needPhrase')
             : encOn
-              ? 'Encrypted & unlocked'
-              : 'Encryption paused'
+              ? t('menu.status.on')
+              : t('menu.status.paused')
     return BdApi.ReactDOM.createPortal(
       (
         <div className="bp-popover" style={style} ref={popRef}>
@@ -298,21 +298,18 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
           <div className="bp-popover-sep" />
           {channelId ? (
             <div className="bp-popover-item" onClick={changePhrase}>
-              {activeEntry ? 'Change phrase…' : 'Set phrase…'}
+              {activeEntry ? t('menu.changePhrase') : t('menu.setPhrase')}
             </div>
           ) : null}
           {activeEntry ? (
             <div className="bp-popover-item" onClick={forgetKey}>
-              Forget this channel{"'"}s key
+              {t('menu.forgetChannelKey')}
             </div>
           ) : null}
           <div className="bp-popover-item" onClick={lockAllNow}>
-            Lock everything now
+            {t('menu.lockNow')}
           </div>
-          <div className="bp-popover-hint">
-            Tip: <code>/pt msg</code> sends one message unencrypted {'·'} multiple keys live in
-            Settings {'→'} BetterPrivacy
-          </div>
+          <div className="bp-popover-hint">{t('menu.tip')}</div>
         </div>
       ),
       document.body,
@@ -434,6 +431,40 @@ function startDomFallback(ctx: PluginContext): void {
 }
 
 // ---------------------------------------------------------------------------
+// Shared render-target resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds the object that actually OWNS ChannelTextArea's render function, i.e.
+ * the thing a Patcher call has to be pointed at.
+ *
+ * ASSUMPTION (fragile): ChannelTextArea is typically memo(forwardRef(fn)), so
+ * the patchable render lives at `.type.render`; on some versions the module
+ * itself is the forwardRef object (`.render` directly). Returns null when
+ * neither shape matches — then no render patch of any kind is possible and
+ * callers must degrade (this file goes to its DOM fallback; composerLimit.ts
+ * simply skips the paste-prompt raise).
+ *
+ * EXPORTED because composerLimit.ts patches the SAME render function (a
+ * Patcher.before that raises `uploadPromptCharacterCount` while a channel is
+ * encrypted). Sharing this six-line probe was chosen over duplicating it: it
+ * keeps ONE description of Discord's component shape, so a future Discord
+ * refactor is fixed in one place instead of two that can silently drift — and
+ * it needs no restructuring here, since the existing lookup was already this
+ * self-contained expression. patches/* already import from ui/* (send, render,
+ * upload and attachments all pull in ui/UnlockModal), so the direction of this
+ * import introduces nothing new.
+ */
+export function resolveTextAreaRenderTarget(ChannelTextArea: any): any | null {
+  if (!ChannelTextArea) return null
+  if (ChannelTextArea.type && typeof ChannelTextArea.type.render === 'function') {
+    return ChannelTextArea.type
+  }
+  if (typeof ChannelTextArea.render === 'function') return ChannelTextArea
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Contract export
 // ---------------------------------------------------------------------------
 
@@ -451,17 +482,10 @@ export function applyChatBarPatch(ctx: PluginContext): void {
     startDomFallback(ctx)
   }
 
-  // ASSUMPTION (fragile): ChannelTextArea is typically memo(forwardRef(fn)),
-  // so the patchable render function lives at .type.render; on some versions
-  // the module itself is the forwardRef object (.render directly). If
-  // neither shape matches we cannot Patcher.after a render and go straight
+  // See resolveTextAreaRenderTarget above for the component-shape assumption.
+  // If neither shape matches we cannot Patcher.after a render and go straight
   // to the DOM fallback.
-  const renderTarget =
-    ChannelTextArea.type && typeof ChannelTextArea.type.render === 'function'
-      ? ChannelTextArea.type
-      : typeof ChannelTextArea.render === 'function'
-        ? ChannelTextArea
-        : null
+  const renderTarget = resolveTextAreaRenderTarget(ChannelTextArea)
 
   if (!renderTarget) {
     startFallbackOnce()

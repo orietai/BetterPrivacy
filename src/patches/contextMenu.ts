@@ -12,6 +12,7 @@
 
 import type { KeyEntry, PluginContext } from '../types'
 import { parseWire } from '../crypto/wire'
+import { t } from '../i18n'
 
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
@@ -59,7 +60,7 @@ function openImportKeyModal(ctx: PluginContext): void {
     React.createElement('input', {
       className: 'bp-import-pass',
       type: 'password',
-      placeholder: 'Passphrase',
+      placeholder: t('cm.passPh'),
       style: { width: '100%' },
       onChange: (e: any) => {
         passphrase = String(e?.target?.value ?? '')
@@ -68,9 +69,9 @@ function openImportKeyModal(ctx: PluginContext): void {
   )
 
   try {
-    BdApi.UI.showConfirmationModal('🦇 Import BetterPrivacy key', content, {
-      confirmText: 'Import',
-      cancelText: 'Cancel',
+    BdApi.UI.showConfirmationModal(t('cm.importTitle'), content, {
+      confirmText: t('common.import'),
+      cancelText: t('common.cancel'),
       onConfirm: () => {
         // importBlob verifies the passphrase against the KCV and throws a
         // user-readable Error on any failure (types.ts contract).
@@ -83,17 +84,17 @@ function openImportKeyModal(ctx: PluginContext): void {
             } catch {
               // Unlock can be done later from the key picker.
             }
-            toast(`BetterPrivacy: key "${entry.label}" imported & unlocked`, 'success')
+            toast(t('cm.imported', { label: entry.label }), 'success')
             ctx.forceRerender()
           })
           .catch((err: any) => {
-            toast(`BetterPrivacy: import failed — ${err?.message ?? 'unknown error'}`, 'error')
+            toast(t('cm.importFailed', { error: err?.message ?? 'unknown error' }), 'error')
           })
       },
     })
   } catch (err) {
     console.error('[BetterPrivacy] import modal failed', err)
-    toast('BetterPrivacy: could not open the import dialog', 'error')
+    toast(t('cm.importDialogFailed'), 'error')
   }
 }
 
@@ -105,15 +106,15 @@ function buildMessageItems(ctx: PluginContext, message: any): any[] {
   if (wire) {
     items.push({
       id: 'bp-copy-ciphertext',
-      label: 'Copy ciphertext',
+      label: t('cm.copyCipher'),
       action: () => {
         try {
           navigator.clipboard
             .writeText(String(message.content))
-            .then(() => toast('BetterPrivacy: ciphertext copied', 'success'))
-            .catch(() => toast('BetterPrivacy: copy failed', 'error'))
+            .then(() => toast(t('cm.copied'), 'success'))
+            .catch(() => toast(t('cm.copyFailed'), 'error'))
         } catch {
-          toast('BetterPrivacy: copy failed', 'error')
+          toast(t('cm.copyFailed'), 'error')
         }
       },
     })
@@ -121,7 +122,7 @@ function buildMessageItems(ctx: PluginContext, message: any): any[] {
 
   items.push({
     id: 'bp-redecrypt',
-    label: 'Re-decrypt',
+    label: t('cm.redecrypt'),
     action: () => {
       try {
         // DecryptCache purges by keyId, not per-message: purge this message's
@@ -140,7 +141,7 @@ function buildMessageItems(ctx: PluginContext, message: any): any[] {
 
   items.push({
     id: 'bp-import-key',
-    label: 'Import key for this message…',
+    label: t('cm.importForMsg'),
     action: () => openImportKeyModal(ctx),
   })
 
@@ -208,11 +209,11 @@ export function applyContextMenuPatches(ctx: PluginContext): void {
       const applySelection = (keyId: string | null, label: string): void => {
         try {
           ctx.keyring.setActiveSendKey(channelId, keyId)
-          toast(`BetterPrivacy: default key for this channel set to ${label}`, 'success')
+          toast(t('cm.defaultSet', { label }), 'success')
           ctx.forceRerender()
         } catch (err) {
           console.error('[BetterPrivacy] set default key failed', err)
-          toast('BetterPrivacy: could not set the default key', 'error')
+          toast(t('cm.defaultSetFailed'), 'error')
         }
         try {
           cm.close?.()
@@ -225,9 +226,9 @@ export function applyContextMenuPatches(ctx: PluginContext): void {
         {
           type: 'radio',
           id: 'bp-key-none',
-          label: 'None',
+          label: t('cm.none'),
           checked: active === null,
-          action: () => applySelection(null, 'none'),
+          action: () => applySelection(null, t('cm.none')),
         },
         ...entries.map((e) => ({
           type: 'radio',
@@ -243,7 +244,7 @@ export function applyContextMenuPatches(ctx: PluginContext): void {
         cm.buildItem({
           type: 'submenu',
           id: 'bp-default-key',
-          label: 'Set default BetterPrivacy key',
+          label: t('cm.defaultKey'),
           items: subItems,
         }),
       )
