@@ -3,6 +3,9 @@
   if (window.BPHome) return;
   // Match complete text nodes, never replace their containing markup.
   var copy = [
+    ['Open source. Yours to inspect.', 'Açık kaynak. İncelemek senin elinde.', 'Открытый код. Изучайте сами.'],
+    ['View on GitHub ↗', 'GitHub’da incele ↗', 'Посмотреть на GitHub ↗'],
+    ['Read the code, report an issue, or contribute.', 'Kodu incele, sorun bildir veya katkıda bulun.', 'Изучайте код, сообщайте о проблемах или вносите свой вклад.'],
     ['Skip to content', 'İçeriğe geç', 'Перейти к содержимому'],
     ['Language', 'Dil', 'Язык'],
     ['How it works', 'Nasıl çalışır', 'Как это работает'],

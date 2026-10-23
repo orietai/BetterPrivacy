@@ -509,6 +509,12 @@
   .statement .s-hint { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
   @media (prefers-reduced-motion: reduce) { .statement .sredact::after { display: none; } }
 
+  .source-note { color: var(--muted); font-size: 13px; margin: 20px 0 0; }
+  .source-link { color: var(--muted); text-decoration: underline; text-underline-offset: 4px; }
+  .source-link:hover { color: var(--text); }
+  .source-link:focus-visible { outline: 2px solid var(--green-text); outline-offset: 5px; border-radius: 3px; }
+  .mobile-companion { display: inline-block; font-size: 13px; margin-top: 12px; padding: 6px 0; }
+  .source-invite { margin: 0 0 28px; font-size: 15px; line-height: 1.6; }
   /* security */
   .honesty { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 76px; }
   @media (max-width: 760px) { .honesty { grid-template-columns: 1fr; gap: 44px; } }
@@ -642,10 +648,12 @@
         <strong>inside your client, before they're sent</strong> — share one phrase,
         everything else is automatic.
       </p>
+      <p class="source-note">Open source. Yours to inspect.</p>
       <div class="hero-ctas">
         <a class="btn btn-green" href="#install">Download the plugin <span class="ico">↓</span></a>
-        <a class="btn btn-quiet" href="/create/">On mobile? Use the web ↗</a>
+        <a class="btn btn-quiet" href="https://github.com/orietai/BetterPrivacy">View on GitHub ↗</a>
       </div>
+      <a class="source-link mobile-companion" href="/create/">On mobile? Use the web ↗</a>
       <ul class="facts">
         <li>
           <b>AES-256-GCM, locally</b>
@@ -833,6 +841,7 @@
         WebCrypto, PBKDF2-HMAC-SHA256 at 600,000 rounds, with authenticated messages and files. Not independently audited.
       </p>
 
+      <p class="source-invite"><a class="source-link" href="https://github.com/orietai/BetterPrivacy">Read the code, report an issue, or contribute.</a></p>
       <div class="honesty">
         <div>
           <h3>What it protects</h3>
@@ -952,6 +961,7 @@
         <a href="/create/">Create a message</a>
         <a href="/m/">Open a message</a>
         <a href="/terms/">Terms</a>
+        <a href="https://github.com/orietai/BetterPrivacy">GitHub</a>
       </span>
     </div>
     <p class="legal">

@@ -28,6 +28,26 @@ function landing(reduced = false, lang = 'en') {
 }
 
 describe('restored animated landing page', () => {
+  it('keeps download primary and source links localized without replacing the demo', () => {
+    const { dom, doc } = landing(true)
+    try {
+      const repo = 'https://github.com/orietai/BetterPrivacy'
+      const github = doc.querySelector('.hero-ctas .btn-quiet')!
+      expect(github.getAttribute('href')).toBe(repo)
+      expect(doc.querySelector('.hero-ctas .btn-green')?.getAttribute('href')).toBe('#install')
+      expect(doc.querySelector('.mobile-companion')?.getAttribute('href')).toBe('/create/')
+      expect(doc.querySelector('#security .source-link')?.getAttribute('href')).toBe(repo)
+      expect(doc.querySelector(`footer a[href="${repo}"]`)).not.toBeNull()
+      const note = doc.querySelector('.source-note')!
+      for (const [lang, text] of [['tr', 'Açık kaynak. İncelemek senin elinde.'], ['ru', 'Открытый код. Изучайте сами.'], ['en', 'Open source. Yours to inspect.']]) {
+        ;(doc.querySelector(`[data-lang="${lang}"]`) as HTMLButtonElement).click()
+        expect(note.textContent).toBe(text)
+        expect(github.getAttribute('href')).toBe(repo)
+      }
+      expect(doc.querySelector('#security')?.textContent).toContain('Not independently audited.')
+      expect(doc.getElementById('demo')).not.toBeNull()
+    } finally { dom.window.close() }
+  })
   it('translates real copy and preserves nested markup, animation nodes and route locale', () => {
     const { dom, doc, errors } = landing()
     try {
