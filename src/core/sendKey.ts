@@ -26,7 +26,7 @@ export async function selectSendKey(
   const revision = ctx.session.revision
   const previous = ctx.keyring.getActiveSendKey(channelId)
   const previousMode = ctx.keyring.isEncryptModeOn(channelId)
-  const broken = () => ctx.modules.failed.some(f => /send|MessageActions|upload|CloudUpload/i.test(f))
+  const broken = () => ctx.modules.failed.some(f => /send|edit(?:Composer)?:|MessageActions|MessageStore|upload|CloudUpload/i.test(f))
   try {
     if (broken()) return false
     const entry = ctx.keyring.forChannel(channelId).find(item => item.id === keyId)

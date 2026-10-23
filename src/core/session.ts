@@ -12,6 +12,12 @@ import { t } from '../i18n'
 
 const SWEEP_INTERVAL_MS = 60_000
 
+/** Internal extension: modal cancellation is local to its attempt, not a lock
+ * of every other reader using this key. Keep the public Session API unchanged. */
+export function unlockIfCurrent(session: Session, entry: KeyEntry, phrase: string, current: () => boolean): Promise<boolean> {
+  return (session.unlock as (entry: KeyEntry, phrase: string, current?: () => boolean) => Promise<boolean>)(entry, phrase, current)
+}
+
 interface UnlockedKey {
   key: CryptoKey
   unlockedAt: number
@@ -41,7 +47,6 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
     // Also invalidate pending PBKDF2 work when no key has finished unlocking.
     generation++
     revision++
-    if (unlocked.size === 0) return
     unlocked.clear()
     fireRelock('all', reason)
   }
@@ -54,10 +59,12 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
     for (const [keyId, entry] of unlocked) {
       if (now - entry.lastUsedAt > timeoutSec * 1000) {
         unlocked.delete(keyId)
+        keyGenerations.set(keyId, (keyGenerations.get(keyId) ?? 0) + 1)
         purged.push(keyId)
       }
     }
     if (purged.length > 0) {
+      revision++
       fireRelock(purged, 'timeout')
       BdApi.UI.showToast(t('ses.expired'), { type: 'info' })
     }
@@ -65,21 +72,24 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
 
   return {
     get revision(): number { return revision },
-    async unlock(entry: KeyEntry, passphrase: string): Promise<boolean> {
-      if (stopped) return false
+    async unlock(entry: KeyEntry, passphrase: string, current: () => boolean = () => true): Promise<boolean> {
+      if (stopped || !current()) return false
       const started = generation
       const keyStarted = keyGenerations.get(entry.id) ?? 0
+      const { id, salt, check } = entry
       let derived
       try {
-        derived = await deriveKeyMaterial(passphrase, entry.salt)
+        derived = await deriveKeyMaterial(passphrase, salt)
       } catch (err) {
         console.error(`[${PLUGIN_NAME}] key derivation failed`, err)
         return false
       }
       // Wrong passphrase => different derived bits => KCV and keyId both
       // diverge from the stored entry. Check both for defense in depth.
-      if (derived.kcv !== entry.check || derived.keyId !== entry.id) return false
-      if (stopped || generation !== started || (keyGenerations.get(entry.id) ?? 0) !== keyStarted || !keyring.get(entry.id)) return false
+      if (derived.kcv !== check || derived.keyId !== id) return false
+      const saved = keyring.get(id)
+      if (stopped || !current() || generation !== started || (keyGenerations.get(id) ?? 0) !== keyStarted ||
+          saved?.salt !== salt || saved?.check !== check) return false
       const now = Date.now()
       unlocked.set(entry.id, { key: derived.key, unlockedAt: now, lastUsedAt: now })
       return true
@@ -99,9 +109,8 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
     lockKey(keyId: string): void {
       revision++
       keyGenerations.set(keyId, (keyGenerations.get(keyId) ?? 0) + 1)
-      if (unlocked.delete(keyId)) {
-        fireRelock([keyId], 'manual')
-      }
+      unlocked.delete(keyId)
+      fireRelock([keyId], 'manual')
     },
 
     lockAll,
@@ -114,13 +123,12 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
       generation++
       revision++
       // 'previousChannelOnly': lock only keys scoped to the channel we left.
-      if (prevChannelId === null) return
+      if (prevChannelId === null) { fireRelock([], 'lockdown'); return }
       const toLock: string[] = []
       for (const keyId of unlocked.keys()) {
         const entry = keyring.get(keyId)
         if (entry && entry.scope === prevChannelId) toLock.push(keyId)
       }
-      if (toLock.length === 0) return
       for (const keyId of toLock) unlocked.delete(keyId)
       for (const keyId of toLock) keyGenerations.set(keyId, (keyGenerations.get(keyId) ?? 0) + 1)
       fireRelock(toLock, 'lockdown')

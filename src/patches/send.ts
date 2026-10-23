@@ -16,7 +16,7 @@
 
 import type { KeyEntry, PluginContext } from '../types'
 import { encryptText } from '../crypto/cipher'
-import { chunkPlaintext, encodeWire, DISCORD_MESSAGE_LIMIT } from '../crypto/wire'
+import { chunkPlaintext, encodeWire, parseWire, CHUNK_UTF8_BYTES, DISCORD_MESSAGE_LIMIT } from '../crypto/wire'
 import { t } from '../i18n'
 import { openUnlockModal } from '../ui/UnlockModal'
 import { resolveSendKey } from '../core/sendKey'
@@ -213,7 +213,107 @@ function encryptThenSend(
   })()
 }
 
+const installedEditPatches = new WeakMap<PluginContext, WeakSet<object>>()
+
+/** Edits replace exactly one message. Never split, guess a historical key, or
+ * fall back to plaintext when the original cannot be classified. Commands such
+ * as /pt are literal edit text, not an escape from historical encryption. */
+export function applyEditPatch(ctx: PluginContext): void {
+  const actions = ctx.modules.MessageActions
+  try {
+    if (typeof ctx.modules.MessageStore?.getMessage !== 'function' && !ctx.modules.failed.includes('MessageStore')) {
+      // Still install the fail-closed interceptor below: a lazy store must not
+      // leave the original plaintext edit action exposed while recovery waits.
+      ctx.modules.failed.push('MessageStore')
+    }
+    if (actions && installedEditPatches.get(ctx)?.has(actions)) return
+    if (!actions || typeof actions.editMessage !== 'function') {
+      ctx.modules.failed.push('edit: editMessage unavailable')
+      return
+    }
+    ctx.patcher.instead('edit', actions, 'editMessage', (thisObj: any, args: any[], original: (...a: any[]) => any) => (async () => {
+      try {
+        const [channelId, messageId, update] = args
+        if (typeof channelId !== 'string' || !channelId || typeof messageId !== 'string' || !messageId ||
+            !update || typeof update !== 'object' || Array.isArray(update) || typeof update.content !== 'string') {
+          toast(t('edit.unsafe'), 'error')
+          return undefined
+        }
+        // Snapshot draft and metadata before opening any modal.
+        const message = { ...update }
+        const store = ctx.modules.MessageStore
+        const previous = typeof store?.getMessage === 'function' ? store.getMessage(channelId, messageId) : null
+        const oldContent = previous?.content
+        if (typeof oldContent !== 'string') {
+          toast(t('edit.unsafe'), 'error')
+          return undefined
+        }
+        const parts = parseWire(oldContent)
+        // Malformed BetterPrivacy envelopes must not become plaintext edits.
+        if (!parts && /https:\/\/betterprivacy\.app\/m\/?#|^🦇</.test(oldContent)) {
+          toast(t('edit.unsafe'), 'error')
+          return undefined
+        }
+        const mode = ctx.keyring.isEncryptModeOn(channelId)
+        if (!parts && !mode) return await Reflect.apply(original, thisObj, args)
+
+        const entry = parts ? ctx.keyring.get(parts.keyId) : resolveSendKey(ctx.keyring, channelId)
+        if (!entry || (parts && entry.salt !== parts.salt)) {
+          toast(t('edit.noKey'), 'error')
+          return undefined
+        }
+        if (new TextEncoder().encode(message.content).byteLength > CHUNK_UTF8_BYTES) {
+          toast(t('edit.oversize'), 'error')
+          return undefined
+        }
+        const revision = ctx.session.revision
+        const selected = ctx.keyring.getActiveSendKey(channelId)
+        const selectedChannel = ctx.modules.SelectedChannelStore?.getChannelId?.()
+        const salt = entry.salt
+        const unchanged = (): boolean => ctx.session.revision === revision &&
+          ctx.keyring.get(entry.id)?.salt === salt &&
+          ctx.keyring.isEncryptModeOn(channelId) === mode &&
+          ctx.keyring.getActiveSendKey(channelId) === selected &&
+          ctx.modules.SelectedChannelStore?.getChannelId?.() === selectedChannel &&
+          store.getMessage(channelId, messageId)?.content === oldContent &&
+          (!!parts || resolveSendKey(ctx.keyring, channelId)?.id === entry.id)
+        let key = ctx.session.getKey(entry.id)
+        if (!key) {
+          const unlocked = await openUnlockModal(ctx, entry)
+          key = unlocked ? ctx.session.getKey(entry.id) : null
+        }
+        if (!key || !unchanged()) {
+          toast(t('edit.cancelled'), 'warning')
+          return undefined
+        }
+        const { iv, ct } = await encryptText(key, message.content)
+        const wire = encodeWire({ keyId: entry.id, salt, iv, ciphertext: ct })
+        if (!unchanged() || ctx.session.getKey(entry.id) !== key) {
+          toast(t('edit.cancelled'), 'warning')
+          return undefined
+        }
+        const nextArgs = [...args]
+        nextArgs[2] = { ...message, content: wire }
+        const result = await Reflect.apply(original, thisObj, nextArgs)
+        if (sendResultFailed(result)) toast(t('edit.failed'), 'error')
+        return result
+      } catch (err) {
+        console.error('[BetterPrivacy] edit failed; no plaintext fallback', err)
+        toast(t('edit.failed'), 'error')
+        return undefined
+      }
+    })())
+    let installed = installedEditPatches.get(ctx)
+    if (!installed) { installed = new WeakSet(); installedEditPatches.set(ctx, installed) }
+    installed.add(actions)
+  } catch (err) {
+    ctx.modules.failed.push('edit: editMessage interception failed')
+    console.error('[BetterPrivacy] edit hook unavailable', err)
+  }
+}
+
 export function applySendPatch(ctx: PluginContext): void {
+  applyEditPatch(ctx)
   const { modules } = ctx
   const actions = modules.MessageActions
 

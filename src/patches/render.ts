@@ -109,9 +109,15 @@ function EncryptedContent(props: EncryptedContentProps): any {
   React.useEffect(() => {
     if (!modeOn || cachedPresent || !key) return
     let cancelled = false
+    const current = (): boolean => {
+      try {
+        return !cancelled && ctx.session.getKey(parts.keyId) === key &&
+          !!ctx.keyring.get(parts.keyId) && (!props.channelId || ctx.keyring.isEncryptModeOn(props.channelId))
+      } catch { return false }
+    }
     decryptText(key, parts.iv, parts.ciphertext).then(
       (text: string) => {
-        if (cancelled || ctx.session.getKey(parts.keyId) !== key) return
+        if (!current()) return
         try {
           ctx.cache.set(cacheKey, { kind: 'text', text, keyId: parts.keyId })
         } catch {
@@ -123,7 +129,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
       () => {
         // GCM auth failure (tampered ciphertext or wrong key) — cache it so we
         // don't retry on every render (CacheEntry kind 'failed').
-        if (cancelled || ctx.session.getKey(parts.keyId) !== key) return
+        if (!current()) return
         try {
           ctx.cache.set(cacheKey, { kind: 'failed', keyId: parts.keyId })
         } catch {
@@ -167,7 +173,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
 
   // Decrypted (cache hit). The 🦇 marker comes from the stylesheet's
   // .bp-decrypted::before — no inline glyph, or it would render twice.
-  if (cached?.kind === 'text') {
+  if (entry && key && cached?.kind === 'text') {
     return React.createElement(
       'span',
       {
@@ -197,7 +203,7 @@ function EncryptedContent(props: EncryptedContentProps): any {
   }
 
   // Previous GCM auth failure — warn, don't retry.
-  if (cached?.kind === 'failed') {
+  if (entry && key && cached?.kind === 'failed') {
     return React.createElement(
       'span',
       { className: 'bp-failed' },
@@ -240,7 +246,10 @@ function EncryptedContent(props: EncryptedContentProps): any {
         role: 'button',
         tabIndex: 0,
         onClick: () => {
-          openUnlockModal(ctx, entry as KeyEntry)
+          // Verify the phrase against this actual envelope, not solely the
+          // saved salt/KCV. This also safely repairs stale local metadata.
+          openRecoverKeyModal(ctx, parts, props.channelId ?? null,
+            candidate => decryptText(candidate, parts.iv, parts.ciphertext))
             .then((ok: boolean) => {
               if (ok) ctx.forceRerender()
             })
@@ -280,7 +289,12 @@ export function applyRenderPatch(ctx: PluginContext): void {
       // Edits re-key the cache: editedTimestamp is a Moment/Date on live
       // messages, an ISO string on some gateway shapes, or null.
       const editTs = message.editedTimestamp?.valueOf?.() ?? message.editedTimestamp ?? null
-      const cacheKey = ctx.cache.key(String(message.id ?? ''), editTs)
+      // Optimistic/gateway edits can replace content before editedTimestamp
+      // changes. Bind both React and cache identity to the exact encrypted
+      // envelope so an old plaintext/auth-failure entry cannot mask a new edit.
+      // This suffix is ciphertext only; never hash away identity into a lossy
+      // short key that could collide and display another edit's plaintext.
+      const cacheKey = `${ctx.cache.key(String(message.id ?? ''), editTs)}:${content}`
 
       return BdApi.React.createElement(EncryptedContent, {
         key: cacheKey,

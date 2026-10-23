@@ -124,7 +124,7 @@ function channelIdForProps(ctx: PluginContext, props: any): string | null {
  * composer keeps Discord's own cap instead.
  */
 function sendPatchHealthy(ctx: PluginContext): boolean {
-  return !ctx.modules.failed.some((f) => f.includes('send') || f.includes('MessageActions'))
+  return !ctx.modules.failed.some((f) => f.includes('send') || /^edit(?:Composer)?:/.test(f) || f.includes('MessageActions') || f.includes('MessageStore'))
 }
 
 /**

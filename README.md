@@ -193,7 +193,7 @@ Only BetterPrivacy's own strings are translated — Discord's UI, your messages,
 | **Images & GIFs** | ✅ Full | Uploaded as `.bpenc`; recipients see inline preview when unlocked |
 | **Video & audio files** | ✅ Full | `.bpenc` + inline player when unlocked |
 | **Any other file type** | ✅ Full | `.bpenc`; decrypt to download with true filename restored |
-| **Message edits** | ✅ Full | Re-encrypt on edit; render layer re-parses on editTimestamp |
+| **Message edits** | ✅ Protected | A private editor opens the decrypted text, not the URL. Save re-encrypts with the original key; one part maximum. Unknown originals or unavailable keys block edits safely. |
 | **Replies & threads** | ✅ Compatible | Reply metadata is server-side; reply preview shows ciphertext chip. Referenced content stays encrypted |
 | **Stickers** | ⚠️ Blocked | Server-side object; cannot encrypt. Encrypt mode ON: plugin blocks sticker send; use custom emoji text instead |
 | **Reactions** | ❌ Not supported | Server-side counters; cannot carry ciphertext. Workaround: post encrypted "reaction" as a message |
@@ -202,6 +202,13 @@ Only BetterPrivacy's own strings are translated — Discord's UI, your messages,
 | **GIF picker (Tenor)** | ⚠️ Fallback | Download client-side & send as encrypted `.bpenc` instead of linking server-side |
 | **Plugin UI language** | ✅ Full | English · Türkçe · Русский, following Discord's language by default (Settings → BetterPrivacy → Language) |
 | **Reading without the plugin** | ✅ Full | `betterprivacy.app/m` decrypts both linked messages and downloaded `.bpenc` files, entirely in the browser |
+
+Attachment uploads require consistent destination-channel metadata on Discord's
+queued upload. The plugin never substitutes the currently focused channel. If
+that metadata is unavailable, uploads are blocked while keys are configured.
+If the upload hook itself is unavailable, normal file-selection, drop and paste
+flows are blocked while keys are configured, even when the focused channel is
+paused; update/recover the integration rather than relying on a focus change.
 
 ---
 

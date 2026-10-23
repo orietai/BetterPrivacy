@@ -6,7 +6,7 @@ import { createSettingsStore } from '../src/settings'
 import { createDecryptCache } from '../src/core/decryptCache'
 import { applySendPatch } from '../src/patches/send'
 import { applyUploadPatch } from '../src/patches/upload'
-import { openChannelPhraseModal, openRecoverKeyModal } from '../src/ui/UnlockModal'
+import { openChannelPhraseModal, openRecoverKeyModal, openUnlockModal } from '../src/ui/UnlockModal'
 import { deriveKeyMaterial } from '../src/crypto/kdf'
 import { decryptText, encryptText } from '../src/crypto/cipher'
 import { encodeWire, parseWire } from '../src/crypto/wire'
@@ -33,11 +33,15 @@ function harness() {
   const settings = createSettingsStore()
   const keyring = createKeyring()
   const session = createSession(keyring, settings)
-  const actions = { sendMessage: vi.fn(async (..._args: any[]): Promise<any> => ({ ok: true })) }
+  const actions = {
+    sendMessage: vi.fn(async (..._args: any[]): Promise<any> => ({ ok: true })),
+    editMessage: vi.fn(async (..._args: any[]): Promise<any> => ({ ok: true })),
+  }
   const original = actions.sendMessage
   const uploaded: File[] = []
   class CloudUpload {
     item: { file: File }
+    channelId: string | undefined = CHANNEL
     filename: string
     size: number
     mimeType: string
@@ -56,7 +60,7 @@ function harness() {
   }
   const ctx = {
     keyring, session, settings, cache: createDecryptCache(settings), patcher,
-    modules: { MessageActions: actions, CloudUpload, SelectedChannelStore: { getChannelId: () => CHANNEL }, failed: [] },
+    modules: { MessageActions: actions, MessageStore: { getMessage: () => null }, CloudUpload, SelectedChannelStore: { getChannelId: () => CHANNEL }, failed: [] },
     disposers: [], forceRerender: vi.fn(),
   } as unknown as PluginContext
   cleanups.push(() => { session.stop(); unpatches.reverse().forEach((undo) => undo()) })
@@ -78,6 +82,50 @@ async function webEnvelope(plaintext = 'private web message') {
 }
 
 describe('web ↔ plugin recovery', () => {
+  it.each(['salt', 'check'] as const)('authenticates a known message before repairing stale local %s', async field => {
+    const h = harness()
+    const active = await h.arm()
+    const { parts } = await webEnvelope()
+    const valid = await h.ctx.keyring.recover('my saved label', PHRASE, parts, CHANNEL,
+      key => decryptText(key, parts.iv, parts.ciphertext))
+    const damaged = { ...valid, [field]: field === 'salt' ? active.salt : 'AAAAAA' }
+    h.disk.set('keyring', [active, damaged])
+    h.ctx.keyring = createKeyring()
+    h.ctx.session.stop()
+    h.ctx.session = createSession(h.ctx.keyring, h.ctx.settings)
+    await expect(h.ctx.session.unlock(damaged, PHRASE)).resolves.toBe(false)
+    h.confirm.mockImplementation((_title: string, content: any, options: any) => {
+      content.props.passRef.value = PHRASE
+      options.onConfirm()
+      options.onCloseCallback()
+      return 'modal'
+    })
+    await expect(openRecoverKeyModal(h.ctx, parts, CHANNEL,
+      key => decryptText(key, parts.iv, parts.ciphertext))).resolves.toBe(true)
+    expect(h.ctx.keyring.get(parts.keyId)).toEqual(valid)
+    expect(h.ctx.keyring.getActiveSendKey(CHANNEL)).toBe(active.id)
+    const key = h.ctx.session.getKey(parts.keyId)!
+    await expect(decryptText(key, parts.iv, parts.ciphertext)).resolves.toBe('private web message')
+    expect(h.disk.get('keyring')).toContainEqual(valid)
+    h.ctx.session.stop()
+  })
+
+  it('does not repair saved metadata for a wrong phrase or unauthenticated payload', async () => {
+    const h = harness()
+    const { parts } = await webEnvelope()
+    const entry = await h.ctx.keyring.recover('keep label', PHRASE, parts, CHANNEL,
+      key => decryptText(key, parts.iv, parts.ciphertext))
+    h.disk.set('keyring', [{ ...entry, check: 'AAAAAA' }])
+    const keyring = createKeyring()
+    const before = structuredClone(h.disk.get('keyring'))
+    await expect(keyring.recover('ignored', 'wrong', parts, CHANNEL,
+      key => decryptText(key, parts.iv, parts.ciphertext))).rejects.toThrow()
+    await expect(keyring.recover('ignored', PHRASE, parts, CHANNEL,
+      () => Promise.reject(new Error('authentication failed')))).rejects.toThrow()
+    expect(h.disk.get('keyring')).toEqual(before)
+    expect(keyring.list()).toEqual(before)
+  })
+
   it('opens a web-generated random-salt message with only its phrase, without replacing the channel send key', async () => {
     const h = harness()
     const active = await h.arm()
@@ -330,6 +378,104 @@ describe('plugin file upload', () => {
     expect(h.uploaded[1]).toBe(first)
   })
 
+  it('encrypts for the queued destination even when an unencrypted channel is focused', async () => {
+    const h = harness()
+    const entry = await h.arm()
+    h.ctx.modules.SelectedChannelStore = { getChannelId: () => 'other-channel' }
+    applyUploadPatch(h.ctx)
+    await new h.CloudUpload(new File(['private for A'], 'note.txt')).uploadFileToCloud()
+    const opened = await decryptBpenc(h.ctx.session.getKey(entry.id)!, new Uint8Array(await h.uploaded[0]!.arrayBuffer()))
+    expect(new TextDecoder().decode(opened.data)).toBe('private for A')
+  })
+
+  it('does not apply the focused encrypted channel policy to a known plaintext destination', async () => {
+    const h = harness()
+    await h.arm()
+    applyUploadPatch(h.ctx)
+    const source = new File(['public for B'], 'public.txt')
+    const upload = new h.CloudUpload(source)
+    upload.channelId = 'other-channel'
+    await upload.uploadFileToCloud()
+    expect(h.uploaded[0]).toBe(source)
+  })
+
+  it.each(['missing', 'conflicting', 'malformed'])('blocks %s destination metadata rather than guessing from focus', async (kind) => {
+    const h = harness()
+    await h.arm()
+    applyUploadPatch(h.ctx)
+    const upload: any = new h.CloudUpload(new File(['private'], 'note.txt'))
+    if (kind === 'missing') upload.channelId = undefined
+    if (kind === 'conflicting') upload.item.channel_id = 'other-channel'
+    if (kind === 'malformed') upload.channelId = 123
+    await expect(Promise.resolve().then(() => upload.uploadFileToCloud())).rejects.toThrow()
+    expect(h.uploaded).toHaveLength(0)
+  })
+
+  it('accepts matching destination metadata on the upload item without consulting focus', async () => {
+    const h = harness()
+    await h.arm()
+    h.ctx.modules.SelectedChannelStore = { getChannelId: () => null }
+    applyUploadPatch(h.ctx)
+    const upload: any = new h.CloudUpload(new File(['private'], 'note.txt'))
+    delete upload.channelId
+    upload.item.channel_id = CHANNEL
+    await upload.uploadFileToCloud()
+    expect(h.uploaded[0]!.name).toMatch(/\.bpenc$/)
+  })
+
+  it.each(['lock', 'stop', 'remove', 'selection', 'pause', 'destination', 'missing-destination'])('blocks an encrypted retry after %s', async (change) => {
+    const h = harness()
+    const entry = await h.arm()
+    const native = vi.spyOn(h.CloudUpload.prototype, 'uploadFileToCloud')
+      .mockRejectedValueOnce(new Error('synthetic native upload failure'))
+    applyUploadPatch(h.ctx)
+    const upload = new h.CloudUpload(new File(['private'], 'note.txt'))
+    await expect(upload.uploadFileToCloud()).rejects.toThrow('synthetic native upload failure')
+    expect(upload.item.file.name).toMatch(/\.bpenc$/)
+    if (change === 'lock') h.ctx.session.lockAll('manual')
+    if (change === 'stop') h.ctx.session.stop()
+    if (change === 'remove') h.ctx.keyring.remove(entry.id)
+    if (change === 'selection') {
+      const second = await h.ctx.keyring.create('second', PHRASE + ' second', CHANNEL)
+      await h.ctx.session.unlock(second, PHRASE + ' second')
+      h.ctx.keyring.setActiveSendKey(CHANNEL, second.id)
+    }
+    if (change === 'pause') h.ctx.keyring.setEncryptMode(CHANNEL, false)
+    if (change === 'destination') upload.channelId = 'other-channel'
+    if (change === 'missing-destination') upload.channelId = undefined
+    await expect(Promise.resolve().then(() => upload.uploadFileToCloud())).rejects.toThrow()
+    expect(native).toHaveBeenCalledTimes(1)
+    expect(h.uploaded).toHaveLength(0)
+  })
+
+  it('retries the exact ciphertext after a native failure when authorization is unchanged', async () => {
+    const h = harness()
+    await h.arm()
+    vi.spyOn(h.CloudUpload.prototype, 'uploadFileToCloud').mockRejectedValueOnce(new Error('temporary failure'))
+    applyUploadPatch(h.ctx)
+    const upload = new h.CloudUpload(new File(['private'], 'note.txt'))
+    await expect(upload.uploadFileToCloud()).rejects.toThrow('temporary failure')
+    const ciphertext = upload.item.file
+    await upload.uploadFileToCloud()
+    expect(h.uploaded).toEqual([ciphertext])
+  })
+
+  it.each(['destination', 'file'])('cancels if the queued %s changes while reading bytes', async (change) => {
+    const h = harness()
+    await h.arm()
+    applyUploadPatch(h.ctx)
+    const file = new File(['private'], 'note.txt')
+    const upload = new h.CloudUpload(file)
+    const read = file.arrayBuffer.bind(file)
+    file.arrayBuffer = async () => {
+      if (change === 'destination') upload.channelId = 'other-channel'
+      else upload.item.file = new File(['replacement'], 'other.txt')
+      return read()
+    }
+    await expect(upload.uploadFileToCloud()).rejects.toThrow()
+    expect(h.uploaded).toHaveLength(0)
+  })
+
   it('cancels a file whose key is locked while its bytes are still being read', async () => {
     const h = harness()
     await h.arm()
@@ -356,6 +502,9 @@ describe('plugin file upload', () => {
     expect(native).not.toHaveBeenCalled()
     h.ctx.keyring.setEncryptMode(CHANNEL, false)
     input.dispatchEvent(new dom.window.Event('change', { bubbles: true, cancelable: true }))
+    expect(native).not.toHaveBeenCalled() // Focus cannot prove a sidebar/queued destination is plaintext.
+    h.ctx.keyring.list().forEach(entry => h.ctx.keyring.remove(entry.id))
+    input.dispatchEvent(new dom.window.Event('change', { bubbles: true, cancelable: true }))
     expect(native).toHaveBeenCalledTimes(1)
     h.ctx.disposers.forEach((dispose) => dispose())
     h.ctx.keyring.setEncryptMode(CHANNEL, true)
@@ -366,6 +515,23 @@ describe('plugin file upload', () => {
 })
 
 describe('session lock lifecycle', () => {
+  it('does not mislabel a correct phrase as wrong when locking cancels derivation', async () => {
+    const h = harness()
+    const entry = await h.arm()
+    h.ctx.session.lockAll('manual')
+    h.confirm.mockImplementation((_title, content, options) => {
+      content.props.passRef.value = PHRASE
+      options.onConfirm()
+      h.ctx.session.lockAll('manual')
+      return 'modal'
+    })
+    await expect(openUnlockModal(h.ctx, entry)).resolves.toBe(false)
+    const feedback = h.toasts.mock.calls.map(call => call[0]).join('\n')
+    expect(feedback).toContain('cancelled')
+    expect(feedback).not.toContain('Wrong passphrase')
+    expect(h.ctx.session.isUnlocked(entry.id)).toBe(false)
+  })
+
   it('a lock during envelope authentication cannot import and unlock the key afterward', async () => {
     const h = harness()
     const { parts } = await webEnvelope()

@@ -21,6 +21,15 @@ import type { SettingsStore } from './types'
 export type BpLocale = 'en' | 'tr' | 'ru'
 
 const en = {
+  'edit.dialogTitle': 'Edit encrypted message',
+  'edit.save': 'Save encrypted',
+  'edit.hint': 'Edit the message, not its link. Saving keeps the original encryption key. One encrypted part maximum.',
+  'edit.menu': 'Edit encrypted message…',
+  'edit.unsafe': 'BetterPrivacy: cannot verify the original message or edit format. Edit blocked to prevent a plaintext leak.',
+  'edit.noKey': 'BetterPrivacy: the required edit key is unavailable. Recover the original key or select a sending key. Edit blocked.',
+  'edit.oversize': 'BetterPrivacy: encrypted edits must fit one message (1360 UTF-8 bytes / 2000 encrypted characters). Shorten the edit.',
+  'edit.cancelled': 'BetterPrivacy: edit cancelled because unlocking was cancelled or the session, key, mode, selection or original message changed.',
+  'edit.failed': 'BetterPrivacy: edit failed. No plaintext fallback was sent.',
   'sending.channelKey': 'Channel key',
   'sending.picker': 'Sending key',
   'sending.choose': 'Choose a key',
@@ -66,7 +75,7 @@ const en = {
     'BetterPrivacy: no send key selected — click 🦇 to set a phrase, or choose a default key from the channel menu. Send cancelled.',
   'send.cancelledLocked': 'BetterPrivacy: send cancelled — key locked',
   'send.internalError': 'BetterPrivacy: internal error — message NOT sent',
-  'up.unavailable': 'BetterPrivacy: encrypted upload is unavailable — file blocked. Wait for integration recovery or pause encryption explicitly.',
+  'up.unavailable': 'BetterPrivacy: upload integration is unavailable — files are blocked while keys are configured. Wait for integration recovery.',
 
   // ---- render patch (message chips) ----------------------------------------
   'chip.modeOffTitle': 'Encryption mode is off for this channel',
@@ -80,7 +89,7 @@ const en = {
 
   // ---- upload patch ---------------------------------------------------------
   'up.noChannel':
-    'BetterPrivacy: cannot determine the channel — upload blocked to avoid a plaintext leak; switch channels once and retry',
+    'BetterPrivacy: upload destination is missing or inconsistent — file blocked. Reselect it in the destination channel; if this persists, the upload integration needs an update.',
   'up.noAccess': 'BetterPrivacy: cannot access the file to encrypt it — upload aborted',
   'up.noKey': 'BetterPrivacy: encrypt mode is ON but no key is selected — upload aborted',
   'up.cancelledLocked': 'BetterPrivacy: upload cancelled — key locked',
@@ -141,6 +150,7 @@ const en = {
   'um.passphrasePh': 'Passphrase',
   'um.unlocked': 'BetterPrivacy: unlocked "{label}"',
   'um.wrongPassphrase': 'Wrong passphrase',
+  'um.cancelled': 'Unlock cancelled because the session or key changed. Try again when ready.',
   'pm.title': '🦇 Encrypt this channel',
   'pm.prompt': 'Pick a secret phrase for this channel. Your messages here will be encrypted with it.',
   'pm.secretPhrasePh': 'Secret phrase',
@@ -269,6 +279,15 @@ const en = {
 export type MsgKey = keyof typeof en
 
 const tr: Record<MsgKey, string> = {
+  'edit.dialogTitle': 'Şifreli mesajı düzenle',
+  'edit.save': 'Şifreleyerek kaydet',
+  'edit.hint': 'Bağlantıyı değil mesajını düzenle. Kaydedilirken özgün anahtarı korunur. En fazla tek şifreli parça.',
+  'edit.menu': 'Şifreli mesajı düzenle…',
+  'edit.unsafe': 'BetterPrivacy: özgün mesaj veya düzenleme biçimi doğrulanamadı. Düz metin sızıntısını önlemek için düzenleme engellendi.',
+  'edit.noKey': 'BetterPrivacy: gerekli düzenleme anahtarı kullanılamıyor. Özgün anahtarı kurtarın veya gönderim anahtarı seçin. Düzenleme engellendi.',
+  'edit.oversize': 'BetterPrivacy: şifreli düzenleme tek mesaja sığmalıdır (1360 UTF-8 baytı / 2000 şifreli karakter). Metni kısaltın.',
+  'edit.cancelled': 'BetterPrivacy: kilit açma iptal edildi veya oturum, anahtar, mod, seçim ya da özgün mesaj değişti; düzenleme iptal edildi.',
+  'edit.failed': 'BetterPrivacy: düzenleme başarısız. Düz metin gönderilmedi.',
   'sending.channelKey': 'Kanal anahtarı',
   'sending.picker': 'Gönderim anahtarı',
   'sending.choose': 'Anahtar seç',
@@ -312,7 +331,7 @@ const tr: Record<MsgKey, string> = {
     'BetterPrivacy: gönderim anahtarı seçili değil — 🦇 ile ifade belirle veya kanal menüsünden varsayılan anahtar seç. Gönderim iptal edildi.',
   'send.cancelledLocked': 'BetterPrivacy: gönderim iptal edildi — anahtar kilitli',
   'send.internalError': 'BetterPrivacy: iç hata — mesaj GÖNDERİLMEDİ',
-  'up.unavailable': 'BetterPrivacy: şifreli yükleme kullanılamıyor — dosya engellendi. Bağlantının düzelmesini bekle veya şifrelemeyi açıkça duraklat.',
+  'up.unavailable': 'BetterPrivacy: yükleme entegrasyonu kullanılamıyor — kayıtlı anahtarlar varken dosyalar engellenir. Entegrasyonun düzelmesini bekle.',
 
   'chip.modeOffTitle': 'Bu kanalda şifreleme modu kapalı',
   'chip.modeOff': '🔒 Şifreli mesaj — bu kanalda şifreleme kapalı (açmak için tıkla)',
@@ -325,7 +344,7 @@ const tr: Record<MsgKey, string> = {
   'chip.decrypting': '🔒 Çözülüyor…',
 
   'up.noChannel':
-    'BetterPrivacy: kanal belirlenemedi — düz metin sızmasın diye yükleme engellendi; bir kez kanal değiştirip tekrar dene',
+    'BetterPrivacy: yüklemenin hedef kanalı eksik veya tutarsız — dosya engellendi. Dosyayı hedef kanalda yeniden seç; sorun sürerse yükleme entegrasyonu güncellenmeli.',
   'up.noAccess': 'BetterPrivacy: şifrelenecek dosyaya erişilemedi — yükleme iptal edildi',
   'up.noKey': 'BetterPrivacy: şifreleme AÇIK ama anahtar seçili değil — yükleme iptal edildi',
   'up.cancelledLocked': 'BetterPrivacy: yükleme iptal edildi — anahtar kilitli',
@@ -383,6 +402,7 @@ const tr: Record<MsgKey, string> = {
   'um.passphrasePh': 'Parola',
   'um.unlocked': 'BetterPrivacy: "{label}" kilidi açıldı',
   'um.wrongPassphrase': 'Yanlış parola',
+  'um.cancelled': 'Oturum veya anahtar değiştiği için kilit açma iptal edildi. Hazır olduğunda tekrar dene.',
   'pm.title': '🦇 Bu kanalı şifrele',
   'pm.prompt': 'Bu kanal için gizli bir ifade seç. Buradaki mesajların onunla şifrelenecek.',
   'pm.secretPhrasePh': 'Gizli ifade',
@@ -505,6 +525,15 @@ const tr: Record<MsgKey, string> = {
 }
 
 const ru: Record<MsgKey, string> = {
+  'edit.dialogTitle': 'Изменить зашифрованное сообщение',
+  'edit.save': 'Сохранить зашифрованным',
+  'edit.hint': 'Редактируйте сообщение, а не ссылку. При сохранении используется исходный ключ. Не более одной зашифрованной части.',
+  'edit.menu': 'Изменить зашифрованное сообщение…',
+  'edit.unsafe': 'BetterPrivacy: невозможно проверить исходное сообщение или формат правки. Правка заблокирована для предотвращения утечки открытого текста.',
+  'edit.noKey': 'BetterPrivacy: нужный ключ недоступен. Восстановите исходный ключ или выберите ключ отправки. Правка заблокирована.',
+  'edit.oversize': 'BetterPrivacy: зашифрованная правка должна помещаться в одно сообщение (1360 байт UTF-8 / 2000 символов шифротекста). Сократите текст.',
+  'edit.cancelled': 'BetterPrivacy: правка отменена: разблокировка отменена либо изменились сеанс, ключ, режим, выбор или исходное сообщение.',
+  'edit.failed': 'BetterPrivacy: не удалось изменить сообщение. Открытый текст не отправлен.',
   'sending.channelKey': 'Ключ канала',
   'sending.picker': 'Ключ отправки',
   'sending.choose': 'Выбрать ключ',
@@ -548,7 +577,7 @@ const ru: Record<MsgKey, string> = {
     'BetterPrivacy: ключ отправки не выбран — задайте фразу через 🦇 или выберите ключ в меню канала. Отправка отменена.',
   'send.cancelledLocked': 'BetterPrivacy: отправка отменена — ключ заблокирован',
   'send.internalError': 'BetterPrivacy: внутренняя ошибка — сообщение НЕ отправлено',
-  'up.unavailable': 'BetterPrivacy: шифрованная загрузка недоступна — файл заблокирован. Дождитесь восстановления или явно приостановите шифрование.',
+  'up.unavailable': 'BetterPrivacy: интеграция загрузки недоступна — файлы блокируются, пока сохранены ключи. Дождитесь восстановления интеграции.',
 
   'chip.modeOffTitle': 'Шифрование в этом канале выключено',
   'chip.modeOff': '🔒 Зашифрованное сообщение — шифрование в канале выключено (нажмите, чтобы включить)',
@@ -561,7 +590,7 @@ const ru: Record<MsgKey, string> = {
   'chip.decrypting': '🔒 Расшифровка…',
 
   'up.noChannel':
-    'BetterPrivacy: не удалось определить канал — загрузка заблокирована, чтобы не утёк открытый текст; переключите канал и повторите',
+    'BetterPrivacy: канал назначения отсутствует или указан неоднозначно — файл заблокирован. Выберите файл заново в нужном канале; если ошибка повторится, интеграцию загрузки нужно обновить.',
   'up.noAccess': 'BetterPrivacy: нет доступа к файлу для шифрования — загрузка прервана',
   'up.noKey': 'BetterPrivacy: шифрование ВКЛЮЧЕНО, но ключ не выбран — загрузка прервана',
   'up.cancelledLocked': 'BetterPrivacy: загрузка отменена — ключ заблокирован',
@@ -618,6 +647,7 @@ const ru: Record<MsgKey, string> = {
   'um.passphrasePh': 'Пароль',
   'um.unlocked': 'BetterPrivacy: разблокирован "{label}"',
   'um.wrongPassphrase': 'Неверный пароль',
+  'um.cancelled': 'Разблокировка отменена: изменился сеанс или ключ. Повторите, когда будете готовы.',
   'pm.title': '🦇 Зашифровать этот канал',
   'pm.prompt': 'Придумайте секретную фразу для этого канала. Ваши сообщения здесь будут шифроваться ею.',
   'pm.secretPhrasePh': 'Секретная фраза',

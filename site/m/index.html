@@ -479,7 +479,7 @@
         try {
           buf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(part.iv) }, d.key, b64d(part.ct))
           if (!current()) return
-          decoded.push(new TextDecoder().decode(buf))
+          decoded.push(new TextDecoder('utf-8', { ignoreBOM: true }).decode(buf))
         } catch (_) {
           if (current()) setStatus(msgStatus, activeParts.length > 1 ? 'msg.batchAuth' : 'msg.status.auth', true, progress)
           return
@@ -802,6 +802,13 @@
   fileInput.addEventListener('change', function () {
     if (fileInput.files && fileInput.files[0]) loadFile(fileInput.files[0])
     fileInput.value = ''
+  })
+
+  fPhrase.addEventListener('input', function () {
+    fileGeneration++
+    fgo.disabled = false
+    setStatus(fileStatus, '')
+    clearResult()
   })
 
   fileForm.addEventListener('submit', async function (e) {

@@ -223,7 +223,18 @@ export function createKeyring(): Keyring {
       // Authenticate before writing: wrong phrases and tampered data add nothing.
       await authenticate(derived.key)
       const existing = entries.find((entry) => entry.id === derived.keyId)
-      if (existing) return existing
+      if (existing) {
+        // Local metadata is untrusted. Only a verified fingerprint AND an
+        // authenticated payload may repair it; retain the user's label/scope
+        // and sending selection. Never rewrite records on a failed attempt.
+        if (existing.salt !== metadata.salt || existing.check !== derived.kcv) {
+          const repaired = { ...existing, salt: metadata.salt, check: derived.kcv }
+          entries = entries.map(entry => entry.id === repaired.id ? repaired : entry)
+          saveEntries()
+          return repaired
+        }
+        return existing
+      }
       const entry: KeyEntry = {
         id: derived.keyId, label, salt: metadata.salt, check: derived.kcv, scope, createdAt: Date.now(),
       }

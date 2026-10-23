@@ -19,5 +19,6 @@ export async function decryptText(key: CryptoKey, ivB64: string, ctB64: string):
   const iv = b64urlDecode(ivB64)
   const ct = b64urlDecode(ctB64)
   const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct)
-  return new TextDecoder().decode(pt)
+  // A leading U+FEFF is plaintext, including at independent part boundaries.
+  return new TextDecoder('utf-8', { ignoreBOM: true }).decode(pt)
 }

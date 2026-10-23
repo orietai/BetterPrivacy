@@ -131,8 +131,8 @@ export function resolveModules(): DiscordModules {
       AttachmentComponent: null,
       ChannelTextArea: null,
       failed: [
-        // MessageStore is intentionally absent — unconsumed, silent on miss.
         'MessageActions',
+        'MessageStore',
         'SelectedChannelStore',
         'Dispatcher',
         'MessageContent',
@@ -150,15 +150,12 @@ export function resolveModules(): DiscordModules {
     Webpack.getByKeys('sendMessage', 'editMessage'),
   )
 
-  // MessageStore is resolved for debugging/future use but no patch consumes
-  // it, so a miss must NOT land on `failed` (it would only add noise to the
-  // degraded-mode toast) — resolve silently, null on miss.
-  let MessageStore: any = null
-  try {
-    MessageStore = Webpack.getStore('MessageStore') ?? null
-  } catch {
-    MessageStore = null
-  }
+  // Edits need the original encrypted envelope, never plaintext from the render
+  // layer. A lazy/missing store must be visible and retried, not silently inert.
+  const MessageStore = resolve(failed, 'MessageStore', () => {
+    const store = Webpack.getStore('MessageStore')
+    return typeof store?.getMessage === 'function' ? store : null
+  })
 
   const SelectedChannelStore = resolve(failed, 'SelectedChannelStore', () =>
     Webpack.getStore('SelectedChannelStore'),

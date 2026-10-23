@@ -9,11 +9,16 @@ recipients on mobile or without the plugin.
 ```sh
 npm ci
 npm run verify:release
+npm audit
 ```
 
 The release command runs type checking, tests, and the production build. It also
 checks site assets, local links, script syntax, version metadata, and that the
 website download matches the plugin build.
+
+The full dependency audit must also be clean, including development tooling.
+The shipped plugin and static pages do not load the npm test/build dependencies
+at runtime, but contributors and release builders still execute those tools.
 
 Tests cover encryption and authentication, Unicode-safe message splitting,
 plugin/web interoperability, key recovery, locking and cancellation, attachment
@@ -25,12 +30,28 @@ API adapters—not a live Discord client or mobile browser.
 These require a current Discord client and real devices. Passing automated checks
 does not complete this checklist.
 
+For the first live pass, prioritize: unlock an existing text and image, send and
+edit a new message without changing channels, then lock while an unlock or file
+download is pending. Confirm the indicators, previews, and settings survive a
+plugin disable/enable cycle before proceeding with the full checklist below.
+
 - [ ] Install the release build on two Discord accounts. Exchange short and
   multipart messages, replies, images, and other files. Check Unicode and emoji.
 - [ ] Open received content with the correct phrase. Confirm that an incorrect
   phrase reveals no plaintext.
 - [ ] Switch sending keys, pause/resume encryption, lock keys, change channels,
   and disable/re-enable the plugin. Check indicators and decrypted previews.
+- [ ] Edit an encrypted message, including after changing the sending key or
+  pausing encryption. The editor must start with decrypted text, not the URL,
+  and save encrypted with its original key. Cancel or lock while editing:
+  no changes may be sent, and a lock must clear the visible decrypted draft.
+  The saved message must render without switching channels; verify the same
+  link opens with the original phrase in the web reader.
+  Oversized edits and unavailable original-message state must be blocked.
+- [ ] Queue a file for an encrypted channel and focus another channel before
+  upload. Verify encryption follows the queued destination. After an upload
+  failure, lock keys or change the sending key before retrying: no retry may
+  bypass those changes. Unknown destination metadata must block the upload.
 - [ ] Change language and lockdown scope in plugin settings. Confirm dropdowns
   stay open and selections persist.
 - [ ] Open a Discord-generated link on a phone. Create a multipart message on

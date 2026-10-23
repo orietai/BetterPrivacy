@@ -23,7 +23,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { deriveKeyMaterial, deriveSaltFromLabel } from '../src/crypto/kdf'
 import { encryptText } from '../src/crypto/cipher'
-import { encodeWire } from '../src/crypto/wire'
+import { CHUNK_UTF8_BYTES, chunkPlaintext, encodeWire } from '../src/crypto/wire'
 import { encryptFileToBpenc } from '../src/crypto/bpenc'
 
 const HTML = readFileSync(new URL('../site/m/index.html', import.meta.url), 'utf8')
@@ -43,6 +43,8 @@ const PNG = Uint8Array.from([
 /** Fixtures the plugin itself produced — derived ONCE (PBKDF2 ×600,000). */
 let container: Uint8Array
 let fragment: string
+const UNICODE_TEXT = '\uFEFF' + 'x'.repeat(CHUNK_UTF8_BYTES - 3) + '\uFEFF\uFEFFtail 🔐'
+let unicodeLinks: string[]
 
 beforeAll(async () => {
   const salt = await deriveSaltFromLabel(CHANNEL_LABEL)
@@ -52,6 +54,10 @@ beforeAll(async () => {
   const wire = encodeWire({ keyId, salt, iv, ciphertext: ct })
   // What a browser sees after clicking the 🦇 link: the fragment alone.
   fragment = '#' + wire.slice(wire.indexOf('#') + 1, -1)
+  unicodeLinks = await Promise.all(chunkPlaintext(UNICODE_TEXT).map(async plaintext => {
+    const { iv, ct } = await encryptText(key, plaintext)
+    return encodeWire({ keyId, salt, iv, ciphertext: ct })
+  }))
 }, 30_000)
 
 interface Page {
@@ -207,6 +213,80 @@ function expectNoFile(page: Page) {
 }
 
 describe('decrypt page: lifecycle races through the real DOM', () => {
+  it('editing the file phrase clears visible plaintext and revokes its URL immediately', async () => {
+    const revoked = vi.fn()
+    const page = openPage('', window => { window.URL.revokeObjectURL = revoked })
+    await page.loadFile(container, 'photo.bpenc')
+    await page.submit('file-form', 'file-status', 'fphrase', PASS)
+    const url = page.$('file-dl').getAttribute('href')
+    page.$('fphrase').value = 'new draft'
+    page.$('fphrase').dispatchEvent(new page.window.Event('input', { bubbles: true }))
+    expectNoFile(page)
+    expect(revoked).toHaveBeenCalledWith(url)
+    expect(page.$('fwrap').classList.contains('lit')).toBe(false)
+    expect(page.$('file-status').textContent).toBe('')
+    expect(page.$('fgo').disabled).toBe(false)
+    expect(page.$('fphrase').value).toBe('new draft')
+    expect(page.$('file-unlock').hidden).toBe(false)
+  })
+
+  it.each([
+    { method: 'deriveBits' as const, fail: false },
+    { method: 'deriveBits' as const, fail: true },
+    { method: 'decrypt' as const, fail: false },
+    { method: 'decrypt' as const, fail: true },
+  ])('editing the file phrase invalidates pending $method (failure=$fail)', async ({ method, fail }) => {
+    const gate = cryptoGate(method)
+    const created = vi.fn(() => 'blob:unexpected')
+    const page = openPage('', window => {
+      gate.configure(window)
+      window.URL.createObjectURL = created
+    })
+    await page.loadFile(container, 'photo.bpenc')
+    start(page, true)
+    await gate.started
+    page.$('fphrase').value = 'new draft'
+    page.$('fphrase').dispatchEvent(new page.window.Event('input', { bubbles: true }))
+    expect(page.$('fgo').disabled).toBe(false)
+    expect(page.$('file-status').textContent).toBe('')
+    gate.release(fail)
+    await flush()
+    expectNoFile(page)
+    expect(created).not.toHaveBeenCalled()
+    expect(page.$('fphrase').value).toBe('new draft')
+    expect(page.$('file-status').textContent).toBe('')
+    expect(page.$('file-status').classList.contains('err')).toBe(false)
+    expect(page.$('fgo').disabled).toBe(false)
+    // Editing cancels the operation, but retains the container for a retry.
+    start(page, true)
+    await settled(page, true)
+    expect(page.$('file-result').hidden).toBe(false)
+  })
+
+  it.each([false, true])('obsolete file completion cannot reset controls or clear a newer phrase (failure=%s)', async fail => {
+    const old = cryptoGate('decrypt')
+    const next = cryptoGate('deriveBits')
+    const page = openPage('', old.configure)
+    await page.loadFile(container, 'photo.bpenc')
+    start(page, true)
+    await old.started
+    page.$('fphrase').value = PASS
+    page.$('fphrase').dispatchEvent(new page.window.Event('input', { bubbles: true }))
+    next.configure(page.window)
+    start(page, true)
+    await next.started
+    const status = page.$('file-status').textContent
+    old.release(fail)
+    await flush()
+    expectNoFile(page)
+    expect(page.$('fgo').disabled).toBe(true)
+    expect(page.$('file-status').textContent).toBe(status)
+    expect(page.$('fphrase').value).toBe(PASS)
+    next.release()
+    await settled(page, true)
+    expect(page.$('file-result').hidden).toBe(false)
+  })
+
   it('clears a successful file before a wrong phrase and revokes its download', async () => {
     const revoked = vi.fn()
     const page = openPage('', window => { window.URL.revokeObjectURL = revoked })
@@ -481,6 +561,24 @@ describe('decrypt page: .bpenc file flow', () => {
 })
 
 describe('decrypt page: message fragment flow', () => {
+  it('preserves leading U+FEFF in a single v1 link', async () => {
+    const wire = unicodeLinks[0]!
+    const page = openPage('#' + wire.slice(wire.indexOf('#') + 1, -1))
+    await page.submit('form', 'status', 'phrase', PASS)
+    expect(page.$('result').textContent).toBe(chunkPlaintext(UNICODE_TEXT)[0])
+  })
+
+  it('preserves U+FEFF at multipart boundaries when joining real encrypted links', async () => {
+    expect(unicodeLinks).toHaveLength(2)
+    const page = openPage()
+    page.$('paste-link').value = unicodeLinks.join('\n')
+    page.$('paste-form').dispatchEvent(new page.window.Event('submit', { bubbles: true, cancelable: true }))
+    await page.submit('form', 'status', 'phrase', PASS)
+    expect(page.$('result').hidden).toBe(false)
+    expect(page.$('result').textContent).toBe(UNICODE_TEXT)
+    expect(page.$('status').textContent).toBe('All 2 provided links decrypted and joined locally.')
+  })
+
   it('decrypts a wire message carried in location.hash', async () => {
     const page = openPage(fragment)
     // boot() read the fragment: the decrypt card is up, the fingerprint shown.

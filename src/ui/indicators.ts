@@ -226,6 +226,17 @@ const CSS = `
   font-weight: 600;
   text-transform: uppercase;
 }
+textarea.bp-modal-input {
+  display: block;
+  min-height: 160px;
+  max-height: 50vh;
+  resize: vertical;
+  line-height: 1.5;
+}
+.bp-modal-input:focus-visible {
+  outline: 2px solid var(${INDICATOR_PROP}, #3ba55d);
+  outline-offset: 2px;
+}
 
 /* ---- settings panel -------------------------------------------------------- */
 .bp-settings {

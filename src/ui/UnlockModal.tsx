@@ -16,6 +16,51 @@
 import type { KeyEntry, PluginContext, Scope } from '../types'
 import { channelKeyLabel, friendlyKeyLabel } from './labels'
 import { t } from '../i18n'
+import { unlockIfCurrent } from '../core/session'
+
+const modalOwners = new WeakMap<PluginContext, { stopped: boolean; cancels: Set<() => void> }>()
+
+function lifecycle<T>(ctx: PluginContext, resolve: (value: T) => void, cancelled: T, clear: () => void) {
+  let owner = modalOwners.get(ctx)
+  if (!owner) {
+    owner = { stopped: false, cancels: new Set() }
+    modalOwners.set(ctx, owner)
+    const owned = owner
+    ctx.disposers?.push(() => { owned.stopped = true; for (const cancel of [...owned.cancels]) cancel() })
+    ctx.session.onRelock(() => {
+      if (owned.cancels.size) feedback('um.cancelled', 'info')
+      for (const cancel of [...owned.cancels]) cancel()
+    })
+  }
+  const revision = ctx.session.revision
+  const channel = ctx.modules.SelectedChannelStore?.getChannelId?.()
+  let settled = false
+  const finish = (value: T): void => {
+    if (settled) return
+    settled = true
+    owner!.cancels.delete(cancel)
+    clear()
+    resolve(value)
+  }
+  const cancel = (): void => finish(cancelled)
+  owner.cancels.add(cancel)
+  return {
+    finish, cancel,
+    current: (): boolean => !settled && !owner!.stopped && ctx.session.revision === revision &&
+      ctx.modules.SelectedChannelStore?.getChannelId?.() === channel,
+    settled: (): boolean => settled,
+  }
+}
+
+interface PhraseRef { value: string; input?: HTMLInputElement | null }
+function clearPhrase(ref: PhraseRef): void {
+  ref.value = ''
+  if (ref.input) { ref.input.value = ''; ref.input.disabled = true }
+}
+function phraseValue(ref: PhraseRef): string { return ref.input?.value ?? ref.value }
+function feedback(key: string, type: 'info' | 'success' | 'error'): void {
+  try { BdApi.UI.showToast(t(key as Parameters<typeof t>[0]), { type }) } catch { /* Feedback cannot change an operation's result. */ }
+}
 
 /**
  * Best-effort "press Enter to confirm": click the modal's primary action so
@@ -40,7 +85,7 @@ function clickModalConfirm(from: HTMLElement): boolean {
 
 function UnlockContent(props: {
   entry: KeyEntry
-  passRef: { value: string }
+  passRef: PhraseRef
   onEnter: (el: HTMLElement) => void
 }): JSX.Element {
   const { useState } = BdApi.React
@@ -58,6 +103,7 @@ function UnlockContent(props: {
         <code style={{ fontSize: 12, opacity: 0.7 }}>{props.entry.id}</code>
       </div>
       <input
+        ref={(input: HTMLInputElement | null) => { props.passRef.input = input }}
         className="bp-modal-input"
         type="password"
         autoFocus
@@ -68,7 +114,8 @@ function UnlockContent(props: {
           props.passRef.value = e.target.value
         }}
         onKeyDown={(e: any) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.nativeEvent?.isComposing && !e.isComposing && e.keyCode !== 229) {
+            props.passRef.value = e.currentTarget.value
             e.preventDefault()
             e.stopPropagation()
             props.onEnter(e.currentTarget as HTMLElement)
@@ -82,17 +129,12 @@ function UnlockContent(props: {
 /** Resolves true if the key was unlocked, false on wrong passphrase or cancel. */
 export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    let settled = false
     let unlocking = false
     let confirming = false
     let closed = false
-    const settle = (v: boolean): void => {
-      if (settled) return
-      settled = true
-      resolve(v)
-    }
-
-    const passRef = { value: '' }
+    const passRef: PhraseRef = { value: '' }
+    const life = lifecycle<boolean>(ctx, resolve, false, () => clearPhrase(passRef))
+    const settle = life.finish
 
     /**
      * `fromConfirm` = invoked via the modal's Unlock button (modal already
@@ -100,16 +142,24 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
      * the modal open, so failure there leaves the promise pending for a retry.
      */
     const attemptUnlock = (fromConfirm: boolean): void => {
-      if (settled || unlocking) return
+      if (life.settled() || unlocking) return
+      if (!life.current()) { life.cancel(); return }
       unlocking = true
-      void ctx.session
-        .unlock(entry, passRef.value)
+      const phrase = phraseValue(passRef)
+      void unlockIfCurrent(ctx.session, entry, phrase, life.current)
         .then((ok) => {
+          if (life.settled()) return
+          const saved = ctx.keyring.get(entry.id)
+          if (!life.current() || saved?.salt !== entry.salt || saved?.check !== entry.check) {
+            feedback('um.cancelled', 'info')
+            settle(false)
+            return
+          }
           if (ok) {
-            BdApi.UI.showToast(t('um.unlocked', { label: entry.label }), { type: 'success' })
+            try { BdApi.UI.showToast(t('um.unlocked', { label: entry.label }), { type: 'success' }) } catch { /* best effort */ }
             settle(true)
           } else {
-            BdApi.UI.showToast(t('um.wrongPassphrase'), { type: 'error' })
+            feedback('um.wrongPassphrase', 'error')
             // Also settle when the modal was closed mid-unlock (`closed`):
             // with the Enter fallback the modal normally stays open for a
             // retry, but once it's gone nothing else can ever settle and an
@@ -118,8 +168,10 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
           }
         })
         .catch(() => {
-          BdApi.UI.showToast(t('um.wrongPassphrase'), { type: 'error' })
-          if (fromConfirm || closed) settle(false)
+          if (life.settled()) return
+          const cancelled = !life.current()
+          feedback(cancelled ? 'um.cancelled' : 'pm.setupFailed', cancelled ? 'info' : 'error')
+          if (cancelled || fromConfirm || closed) settle(false)
         })
         .then(() => {
           unlocking = false
@@ -141,13 +193,13 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
           confirming = true
           attemptUnlock(true)
         },
-        onCancel: () => { ctx.session.lockKey(entry.id); settle(false) },
+        onCancel: life.cancel,
         // Fires on any close (Escape, backdrop). When closing via confirm the
         // async unlock is still in flight — don't settle(false) underneath it
         // (`closed` lets that in-flight attempt settle on failure instead).
         onCloseCallback: () => {
           closed = true
-          if (!confirming) { ctx.session.lockKey(entry.id); settle(false) }
+          if (!confirming) life.cancel()
         },
       },
     )
@@ -163,7 +215,7 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
 
 function PhraseContent(props: {
   prompt: string
-  passRef: { value: string }
+  passRef: PhraseRef
   onEnter: (el: HTMLElement) => void
 }): JSX.Element {
   const { useState } = BdApi.React
@@ -172,6 +224,7 @@ function PhraseContent(props: {
     <div>
       <div style={{ color: 'var(--text-normal, #dbdee1)', marginBottom: 4 }}>{props.prompt}</div>
       <input
+        ref={(input: HTMLInputElement | null) => { props.passRef.input = input }}
         className="bp-modal-input"
         type="password"
         autoFocus
@@ -182,7 +235,8 @@ function PhraseContent(props: {
           props.passRef.value = e.target.value
         }}
         onKeyDown={(e: any) => {
-          if (e.key === 'Enter') {
+          if (e.key === 'Enter' && !e.nativeEvent?.isComposing && !e.isComposing && e.keyCode !== 229) {
+            props.passRef.value = e.currentTarget.value
             e.preventDefault()
             e.stopPropagation()
             props.onEnter(e.currentTarget as HTMLElement)
@@ -198,40 +252,44 @@ export function openChannelPhraseModal(
   ctx: PluginContext,
   channelId: string,
 ): Promise<KeyEntry | null> {
-  if (ctx.modules.failed.some((failure) => /send|MessageActions|upload|CloudUpload/i.test(failure))) {
+  if (ctx.modules.failed.some((failure) => /send|edit(?:Composer)?:|MessageActions|MessageStore|upload|CloudUpload/i.test(failure))) {
     BdApi.UI.showToast(t('bar.broken'), { type: 'error' })
     return Promise.resolve(null)
   }
   return new Promise<KeyEntry | null>((resolve) => {
-    let settled = false
     let confirming = false
-    const settle = (v: KeyEntry | null): void => {
-      if (settled) return
-      settled = true
-      resolve(v)
-    }
-
-    const passRef = { value: '' }
+    let busy = false
+    const passRef: PhraseRef = { value: '' }
+    const life = lifecycle<KeyEntry | null>(ctx, resolve, null, () => clearPhrase(passRef))
+    const settle = life.finish
 
     const submit = (): void => {
-      if (settled) return
-      if (!passRef.value) {
+      if (life.settled() || busy) return
+      if (!life.current()) { life.cancel(); return }
+      const phrase = phraseValue(passRef)
+      if (!phrase) {
         BdApi.UI.showToast(t('pm.phraseRequired'), { type: 'error' })
         settle(null)
         return
       }
-      const revision = ctx.session.revision
+      busy = true
       void (async () => {
         try {
-          const entry = await ctx.keyring.create(channelKeyLabel(channelId), passRef.value, channelId)
-          if (ctx.session.revision !== revision) { settle(null); return }
-          if (!(await ctx.session.unlock(entry, passRef.value))) throw new Error(t('pm.setupFailed'))
+          const entry = await ctx.keyring.create(channelKeyLabel(channelId), phrase, channelId)
+          if (!life.current()) { life.cancel(); return }
+          if (!(await unlockIfCurrent(ctx.session, entry, phrase, life.current))) {
+            if (!life.current()) { life.cancel(); return }
+            throw new Error(t('pm.setupFailed'))
+          }
+          if (!life.current()) { life.cancel(); return }
           ctx.keyring.setActiveSendKey(channelId, entry.id)
           ctx.keyring.setEncryptMode(channelId, true)
           BdApi.UI.showToast(t('pm.channelEncrypted'), { type: 'success' })
           ctx.forceRerender()
           settle(entry)
         } catch (err: any) {
+          if (life.settled()) return
+          if (!life.current()) { life.cancel(); return }
           BdApi.UI.showToast(err?.message ?? t('pm.setupFailed'), { type: 'error' })
           settle(null)
         }
@@ -240,7 +298,6 @@ export function openChannelPhraseModal(
 
     const onEnter = (el: HTMLElement): void => {
       if (!clickModalConfirm(el)) {
-        confirming = true
         submit()
       }
     }
@@ -255,9 +312,9 @@ export function openChannelPhraseModal(
           confirming = true
           submit()
         },
-        onCancel: () => settle(null),
+        onCancel: life.cancel,
         onCloseCallback: () => {
-          if (!confirming) settle(null)
+          if (!confirming) life.cancel()
         },
       },
     )
@@ -272,6 +329,8 @@ interface CreateKeyState {
   label: string
   passphrase: string
   channelOnly: boolean
+  passInput?: HTMLInputElement | null
+  labelInput?: HTMLInputElement | null
 }
 
 function CreateKeyContent(props: {
@@ -285,7 +344,7 @@ function CreateKeyContent(props: {
   const [channelOnly, setChannelOnly] = useState(false)
 
   const onKeyDown = (e: any): void => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.nativeEvent?.isComposing && !e.isComposing && e.keyCode !== 229) {
       e.preventDefault()
       e.stopPropagation()
       props.onEnter(e.currentTarget as HTMLElement)
@@ -296,6 +355,7 @@ function CreateKeyContent(props: {
     <div>
       <label className="bp-modal-label">{t('ck.labelLabel')}</label>
       <input
+        ref={(input: HTMLInputElement | null) => { props.state.labelInput = input }}
         className="bp-modal-input"
         type="text"
         autoFocus
@@ -309,6 +369,7 @@ function CreateKeyContent(props: {
       />
       <label className="bp-modal-label">{t('ck.passLabel')}</label>
       <input
+        ref={(input: HTMLInputElement | null) => { props.state.passInput = input }}
         className="bp-modal-input"
         type="password"
         placeholder={t('ck.passPh')}
@@ -357,35 +418,36 @@ export function openRecoverKeyModal(
   authenticate: (key: CryptoKey) => Promise<unknown>,
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
-    let settled = false
     let confirming = false
-    const settle = (v: boolean): void => {
-      if (settled) return
-      settled = true
-      resolve(v)
-    }
-
-    const passRef = { value: '' }
+    let busy = false
+    const passRef: PhraseRef = { value: '' }
+    const life = lifecycle<boolean>(ctx, resolve, false, () => clearPhrase(passRef))
+    const settle = life.finish
+    const envelope = { ...metadata }
 
     const recover = (): void => {
-      if (settled) return
-      if (!passRef.value) {
+      if (life.settled() || busy) return
+      if (!life.current()) { life.cancel(); return }
+      const phrase = phraseValue(passRef)
+      if (!phrase) {
         BdApi.UI.showToast(t('pm.phraseRequired'), { type: 'error' })
         settle(false)
         return
       }
       // v1 carries the actual salt: use it for web-created, shared and channel
       // keys alike. The label is only local metadata, never a KDF input here.
-      const label = channelId ? channelKeyLabel(channelId) : `message:${metadata.keyId}`
-      const revision = ctx.session.revision
+      busy = true
+      const label = channelId ? channelKeyLabel(channelId) : `message:${envelope.keyId}`
       void ctx.keyring
-        .recover(label, passRef.value, metadata, channelId ?? 'global', async (key) => {
+        .recover(label, phrase, envelope, channelId ?? 'global', async (key) => {
+          if (!life.current()) throw new Error('BP_RECOVERY_CANCELLED')
           await authenticate(key)
-          if (ctx.session.revision !== revision) throw new Error('BP_RECOVERY_CANCELLED')
+          if (!life.current()) throw new Error('BP_RECOVERY_CANCELLED')
         })
         .then(async (entry) => {
-          if (ctx.session.revision !== revision) { settle(false); return }
-          const unlocked = await ctx.session.unlock(entry, passRef.value)
+          if (!life.current()) { life.cancel(); return }
+          const unlocked = await unlockIfCurrent(ctx.session, entry, phrase, life.current)
+          if (!life.current()) { life.cancel(); return }
           if (unlocked) {
             BdApi.UI.showToast(t('rm.accepted'), { type: 'success' })
             ctx.forceRerender()
@@ -393,14 +455,15 @@ export function openRecoverKeyModal(
           settle(unlocked)
         })
         .catch(() => {
-          BdApi.UI.showToast(t('rm.wrongPhrase'), { type: 'error' })
+          if (life.settled()) return
+          const cancelled = !life.current()
+          feedback(cancelled ? 'um.cancelled' : 'rm.wrongPhrase', cancelled ? 'info' : 'error')
           settle(false)
         })
     }
 
     const onEnter = (el: HTMLElement): void => {
       if (!clickModalConfirm(el)) {
-        confirming = true
         recover()
       }
     }
@@ -415,9 +478,9 @@ export function openRecoverKeyModal(
           confirming = true
           recover()
         },
-        onCancel: () => settle(false),
+        onCancel: life.cancel,
         onCloseCallback: () => {
-          if (!confirming) settle(false)
+          if (!confirming) life.cancel()
         },
       },
     )
@@ -435,41 +498,45 @@ export function openCreateKeyModal(
   channelId: string | null = null,
 ): Promise<KeyEntry | null> {
   return new Promise<KeyEntry | null>((resolve) => {
-    let settled = false
     let confirming = false
-    const settle = (v: KeyEntry | null): void => {
-      if (settled) return
-      settled = true
-      resolve(v)
-    }
-
+    let busy = false
     const state: CreateKeyState = { label: '', passphrase: '', channelOnly: false }
+    const life = lifecycle<KeyEntry | null>(ctx, resolve, null, () => {
+      state.passphrase = ''
+      if (state.passInput) { state.passInput.value = ''; state.passInput.disabled = true }
+    })
+    const settle = life.finish
 
     const create = (): void => {
-      if (settled) return
-      const label = state.label.trim()
+      if (life.settled() || busy) return
+      if (!life.current()) { life.cancel(); return }
+      const label = (state.labelInput?.value ?? state.label).trim()
+      const phrase = state.passInput?.value ?? state.passphrase
       if (!label) {
         BdApi.UI.showToast(t('ck.labelRequired'), { type: 'error' })
         settle(null)
         return
       }
-      if (!state.passphrase) {
+      if (!phrase) {
         BdApi.UI.showToast(t('ck.passRequired'), { type: 'error' })
         settle(null)
         return
       }
       const scope: Scope = state.channelOnly && channelId ? channelId : 'global'
+      busy = true
       void ctx.keyring
-        .create(label, state.passphrase, scope)
+        .create(label, phrase, scope)
         .then(async (entry) => {
+          if (!life.current()) { life.cancel(); return }
           // UX: the passphrase is right here — unlock immediately so the user
           // never has to type it a second time straight after creating.
           let unlocked = false
           try {
-            unlocked = await ctx.session.unlock(entry, state.passphrase)
+            unlocked = await unlockIfCurrent(ctx.session, entry, phrase, life.current)
           } catch {
             unlocked = false
           }
+          if (!life.current()) { life.cancel(); return }
           BdApi.UI.showToast(
             unlocked
               ? t('ck.ready', { label: entry.label })
@@ -480,6 +547,8 @@ export function openCreateKeyModal(
           settle(entry)
         })
         .catch((err: any) => {
+          if (life.settled()) return
+          if (!life.current()) { life.cancel(); return }
           BdApi.UI.showToast(err?.message ?? t('ck.createFailed'), { type: 'error' })
           settle(null)
         })
@@ -487,7 +556,6 @@ export function openCreateKeyModal(
 
     const onEnter = (el: HTMLElement): void => {
       if (!clickModalConfirm(el)) {
-        confirming = true
         create()
       }
     }
@@ -502,9 +570,9 @@ export function openCreateKeyModal(
           confirming = true
           create()
         },
-        onCancel: () => settle(null),
+        onCancel: life.cancel,
         onCloseCallback: () => {
-          if (!confirming) settle(null)
+          if (!confirming) life.cancel()
         },
       },
     )

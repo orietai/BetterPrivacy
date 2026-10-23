@@ -55,6 +55,9 @@ describe('first-release composer integration', () => {
   it.each([
     [false, []],
     [true, ['send: MessageActions unavailable']],
+    [true, ['edit: editMessage unavailable']],
+    [true, ['editComposer: unavailable']],
+    [true, ['MessageStore']],
   ])('keeps the native limit when encryption is %s and failures are %j', (encrypted, failed) => {
     const { validator, render } = composer(encrypted as boolean, failed as string[])
     const options = { content: 'a'.repeat(6000), channel: { id: '123' } }

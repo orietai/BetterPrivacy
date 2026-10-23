@@ -8,7 +8,7 @@
  * modules.failed and the manual "encrypt file yourself" fallback described in
  * the spec is the escape hatch).
  *
- * When encrypt mode is ON for the focused channel, the pending File is read,
+ * When encrypt mode is ON for the upload's verified destination, the pending File is read,
  * encrypted to the .bpenc container (spec §5) and swapped in under a random
  * 8-char name BEFORE the original upload runs — Discord's CDN only ever sees
  * ciphertext with the true filename/mime hidden inside the encrypted header.
@@ -20,7 +20,6 @@
  */
 
 import type { PluginContext } from '../types'
-import { resolveCurrentChannelId } from '../modules'
 import { encryptFileToBpenc } from '../crypto/bpenc'
 import { openUnlockModal } from '../ui/UnlockModal'
 import { t } from '../i18n'
@@ -36,6 +35,30 @@ const HARD_CAP_BYTES = 64 * 1024 * 1024
 
 /** Marker error: carries a user-facing message and intentionally aborts the upload. */
 class UploadAbort extends Error {}
+
+/** Destination belongs to the queued upload, never to the currently focused
+ * composer. Reject conflicting/invalid metadata instead of guessing a channel.
+ * Missing metadata is handled fail-closed whenever stored keys exist. */
+function destination(upload: any): string | null {
+  const candidates = [upload?.channelId, upload?.channel_id, upload?.channel?.id,
+    upload?.item?.channelId, upload?.item?.channel_id, upload?.item?.channel?.id]
+  let found: string | null = null
+  for (const value of candidates) {
+    if (value === undefined || value === null) continue
+    if (typeof value !== 'string' || value.trim().length === 0 || (found !== null && found !== value)) {
+      throw new UploadAbort(t('up.noChannel'))
+    }
+    found = value
+  }
+  return found
+}
+
+interface EncryptedUpload {
+  channelId: string
+  keyId: string
+  key: CryptoKey
+  revision: number
+}
 
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
@@ -70,8 +93,9 @@ function installUploadSafetyGuard(ctx: PluginContext): void {
     if (!files?.length) return
     let block = true
     try {
-      const channelId = resolveCurrentChannelId(ctx.modules)
-      block = channelId ? ctx.keyring.isEncryptModeOn(channelId) : ctx.keyring.list().length > 0
+      // With no upload hook there is no trustworthy queued destination. Focus
+      // may be an unencrypted main chat while a thread/sidebar is encrypted.
+      block = ctx.keyring.list().length > 0
     } catch { /* Unknown encryption state: block rather than upload plaintext. */ }
     if (!block) return
     event.preventDefault()
@@ -90,7 +114,7 @@ function installUploadSafetyGuard(ctx: PluginContext): void {
 export function applyUploadPatch(ctx: PluginContext): void {
   const { modules } = ctx
   const CloudUpload = modules.CloudUpload
-  const encryptedFiles = new WeakSet<Blob>()
+  const encryptedFiles = new WeakMap<Blob, EncryptedUpload>()
   installUploadSafetyGuard(ctx)
 
   if (!CloudUpload?.prototype || typeof CloudUpload.prototype.uploadFileToCloud !== 'function') {
@@ -108,17 +132,33 @@ export function applyUploadPatch(ctx: PluginContext): void {
       // The whole synchronous prelude is fail-safe: any throw below aborts the
       // upload rather than falling through to a plaintext passthrough.
       try {
-        // Which channel is this upload for? CloudUpload doesn't reliably carry a
-        // channel id across versions, so use the focused channel — uploads are
-        // initiated from the focused chat.
-        const channelId = resolveCurrentChannelId(modules)
+        const file: unknown = thisObj?.item?.file
+        const previous = file instanceof Blob ? encryptedFiles.get(file) : undefined
+        const channelId = destination(thisObj)
 
         if (channelId === null) {
           // Can't tell whether encrypt mode is armed anywhere. With keys in the
           // keyring, the user may rely on encryption — blocking beats leaking
           // plaintext. With an empty keyring, plaintext is the only possibility.
-          if (ctx.keyring.list().length > 0) {
+          if (previous || ctx.keyring.list().length > 0) {
             throw new UploadAbort(t('up.noChannel'))
+          }
+          return passthrough()
+        }
+
+        const authorized = (record: EncryptedUpload): boolean =>
+          destination(thisObj) === record.channelId &&
+          ctx.session.revision === record.revision &&
+          ctx.session.getKey(record.keyId) === record.key &&
+          !!ctx.keyring.get(record.keyId) &&
+          ctx.keyring.isEncryptModeOn(record.channelId) &&
+          resolveSendKey(ctx.keyring, record.channelId)?.id === record.keyId
+
+        // Retry is still a new send attempt: ownership alone never authorizes
+        // it after a lock, key change, mode change or destination change.
+        if (previous) {
+          if (previous.channelId !== channelId || !authorized(previous)) {
+            throw new UploadAbort(t('sending.cancelled'))
           }
           return passthrough()
         }
@@ -129,17 +169,12 @@ export function applyUploadPatch(ctx: PluginContext): void {
         }
 
         // The upload queue owns the file on its item record.
-        const file: unknown = thisObj?.item?.file
         const currentName: string =
           typeof thisObj?.filename === 'string'
             ? thisObj.filename
             : file instanceof File
               ? file.name
               : ''
-
-        // Only our own ciphertext may bypass encryption on an internal retry.
-        // A filename ending in .bpenc is not proof that its bytes are encrypted.
-        if (file instanceof Blob && encryptedFiles.has(file)) return passthrough()
 
         // Encryption needed: async from here (file read + WebCrypto), so return
         // the promise — uploadFileToCloud is promise-returning anyway.
@@ -176,27 +211,24 @@ export function applyUploadPatch(ctx: PluginContext): void {
               throw new UploadAbort(t('up.tooLarge'))
             }
 
+            const record: EncryptedUpload = { channelId, keyId: entry.id, key, revision: ctx.session.revision }
+            if (!authorized(record) || thisObj?.item?.file !== file) throw new UploadAbort(t('sending.cancelled'))
             const data = new Uint8Array(await file.arrayBuffer())
             const trueName = file instanceof File && file.name ? file.name : currentName || 'file'
             const trueMime = file.type || 'application/octet-stream'
 
-            const encrypted = await encryptFileToBpenc(
-              key,
-              entry.id,
-              entry.salt,
-              data,
-              trueName,
-              trueMime,
-            )
-            if (ctx.session.getKey(entry.id) !== key || !ctx.keyring.get(entry.id) ||
-                !ctx.keyring.isEncryptModeOn(channelId) || resolveSendKey(ctx.keyring, channelId)?.id !== entry.id) {
+            let encrypted: Uint8Array
+            try {
+              encrypted = await encryptFileToBpenc(key, entry.id, entry.salt, data, trueName, trueMime)
+            } finally { data.fill(0) }
+            if (!authorized(record) || thisObj?.item?.file !== file) {
               throw new UploadAbort(t('sending.cancelled'))
             }
             const uploadName = `${randomBasename()}.bpenc`
             const newFile = new File([encrypted as unknown as BlobPart], uploadName, {
               type: 'application/octet-stream',
             })
-            encryptedFiles.add(newFile)
+            encryptedFiles.set(newFile, record)
 
             // Swap the ciphertext file into the CloudUpload instance; mirror the
             // rename/resize onto whichever metadata fields this build carries.

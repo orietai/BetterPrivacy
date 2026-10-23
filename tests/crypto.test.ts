@@ -84,6 +84,12 @@ describe('kdf', () => {
 })
 
 describe('cipher', () => {
+  it.each(['\uFEFF', '\uFEFF\uFEFFhello 🔐\uFEFF', 'hello\uFEFFworld'])('preserves U+FEFF in %j', async plaintext => {
+    const { key } = await material()
+    const { iv, ct } = await encryptText(key, plaintext)
+    await expect(decryptText(key, iv, ct)).resolves.toBe(plaintext)
+  })
+
   it('roundtrips text (incl. multi-byte)', async () => {
     const { key } = await material()
     const plaintext = 'hello 🔐 world — ünïcödé ||spoiler|| `code`'
@@ -203,6 +209,23 @@ describe('wire', () => {
 
 describe('chunkPlaintext', () => {
   const utf8Len = (s: string) => new TextEncoder().encode(s).length
+
+  it('preserves U+FEFF at the start of independently encrypted wire parts', async () => {
+    const { key, keyId } = await material()
+    const input = '\uFEFF' + 'x'.repeat(CHUNK_UTF8_BYTES - 3) + '\uFEFF\uFEFFtail 🔐'
+    const chunks = chunkPlaintext(input)
+    expect(chunks).toHaveLength(2)
+    expect(chunks.every(chunk => chunk.startsWith('\uFEFF'))).toBe(true)
+    const decoded: string[] = []
+    for (const chunk of chunks) {
+      const { iv, ct } = await encryptText(key, chunk)
+      const wire = encodeWire({ keyId, salt: sharedSalt, iv, ciphertext: ct })
+      const parts = parseWire(wire)!
+      decoded.push(await decryptText(key, parts.iv, parts.ciphertext))
+    }
+    expect(decoded).toEqual(chunks)
+    expect(decoded.join('')).toBe(input)
+  })
 
   it('returns a single identical chunk for short text', () => {
     expect(chunkPlaintext('hello')).toEqual(['hello'])

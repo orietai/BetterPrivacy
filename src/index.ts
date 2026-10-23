@@ -12,7 +12,8 @@ import { createKeyring } from './core/keyring'
 import { createSession } from './core/session'
 import { createDecryptCache } from './core/decryptCache'
 import { resolveModules } from './modules'
-import { applySendPatch } from './patches/send'
+import { applySendPatch, applyEditPatch } from './patches/send'
+import { applyEditComposerPatch } from './patches/editComposer'
 import { applyComposerLimitPatch } from './patches/composerLimit'
 import { applyRenderPatch } from './patches/render'
 import { applyUploadPatch } from './patches/upload'
@@ -35,6 +36,7 @@ const RERENDER_EVENT = 'bp-rerender'
 const PATCH_STEPS: ReadonlyArray<{ name: string; apply: (ctx: PluginContext) => void }> = [
   { name: 'injectStyles', apply: injectStyles },
   { name: 'applySendPatch', apply: applySendPatch },
+  { name: 'applyEditComposerPatch', apply: applyEditComposerPatch },
   // Immediately after the send patch: it reads the send patch's health to
   // decide whether raising the composer limit is safe. Absent from
   // RETRYABLE_PATCHES on purpose — it runs its own quiet retries and never
@@ -69,6 +71,8 @@ const MODULE_FIELDS: ReadonlyArray<Exclude<keyof DiscordModules, 'failed'>> = [
  */
 const RETRYABLE_PATCHES: ReadonlyArray<{ prefix: string; apply: (ctx: PluginContext) => void }> = [
   { prefix: 'send:', apply: applySendPatch },
+  { prefix: 'edit:', apply: applyEditPatch },
+  { prefix: 'editComposer:', apply: applyEditComposerPatch },
   { prefix: 'render:', apply: applyRenderPatch },
   { prefix: 'upload:', apply: applyUploadPatch },
   { prefix: 'channelSwitch:', apply: applyChannelSwitchPatch },
@@ -84,7 +88,7 @@ export function friendlyFailureNames(failed: string[]): string[] {
   const out: string[] = []
   for (const raw of failed) {
     let name: string
-    if (raw.includes('send') || raw.includes('MessageActions')) name = t('feat.sending')
+    if (raw.includes('send') || raw.includes('edit:') || raw.includes('editComposer:') || raw.includes('MessageActions') || raw.includes('MessageStore')) name = t('feat.sending')
     else if (raw.includes('render') || raw.includes('MessageContent')) name = t('feat.display')
     else if (raw.includes('upload') || raw.includes('CloudUpload')) name = t('feat.upload')
     else if (raw.includes('attachments') || raw.includes('AttachmentComponent')) name = t('feat.fileDisplay')

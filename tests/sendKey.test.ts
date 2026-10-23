@@ -79,9 +79,9 @@ describe('explicit per-channel sending key', () => {
     expect(h.state.active).toBe('AAAAAAAA')
   })
 
-  it('cannot arm a channel when sending or upload integration is broken', async () => {
+  it.each(['upload: unavailable', 'edit: unavailable', 'editComposer: unavailable', 'MessageStore'])('cannot arm a channel when integration is broken: %s', async (failure) => {
     const h = setup()
-    h.ctx.modules.failed.push('upload: unavailable')
+    h.ctx.modules.failed.push(failure)
     const unlock = vi.fn(async () => true)
     expect(await selectSendKey(h.ctx, CHANNEL, 'BBBBBBBB', unlock)).toBe(false)
     expect(unlock).not.toHaveBeenCalled()

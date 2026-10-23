@@ -31,6 +31,22 @@ import { t } from '../i18n'
 /** Keep in sync with RERENDER_EVENT in index.ts (not exported from there). */
 const RERENDER_EVENT = 'bp-rerender'
 
+const lifecycles = new WeakMap<PluginContext, { stopped: boolean; cancel: Set<() => void> }>()
+function lifecycle(ctx: PluginContext) {
+  let state = lifecycles.get(ctx)
+  if (!state) {
+    state = { stopped: false, cancel: new Set() }
+    lifecycles.set(ctx, state)
+    const owned = state
+    ctx.disposers.push(() => {
+      owned.stopped = true
+      for (const cancel of owned.cancel) cancel()
+      owned.cancel.clear()
+    })
+  }
+  return state
+}
+
 type Phase = 'idle' | 'fetching' | 'unknown' | 'locked' | 'fetchFailed' | 'done'
 
 /**
@@ -74,8 +90,14 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
   // Fetched ciphertext kept only while waiting for an unlock, so unlocking
   // decrypts without a second CDN round-trip; dropped once decrypted.
   const bytesRef = React.useRef(null as Uint8Array | null)
+  const active = React.useRef(null as { valid: () => boolean } | null)
+  const mounted = React.useRef(true)
+  const owner = lifecycle(ctx)
+  const source = String(attachment?.url ?? attachment?.proxy_url ?? '')
+  const sourceRef = React.useRef(source)
+  sourceRef.current = source
 
-  const cacheKey = ctx.cache.key(`att:${String(attachment?.id ?? '')}`)
+  const cacheKey = ctx.cache.key(`att:${String(attachment?.id ?? '')}:${source}`)
 
   let cached
   let maxAutoDownloadBytes = 0
@@ -101,7 +123,27 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       resolveCurrentChannelId(ctx.modules)
     if (gateChannel) modeOn = ctx.keyring.isEncryptModeOn(gateChannel)
   } catch {
-    modeOn = true
+    modeOn = false
+  }
+  modeOn = modeOn && !owner.stopped
+
+  const permitted = (): boolean => {
+    try { return mounted.current && !owner.stopped && sourceRef.current === source &&
+      (!gateChannel || ctx.keyring.isEncryptModeOn(gateChannel)) }
+    catch { return false }
+  }
+  const cancelWork = (): void => {
+    active.current = null
+    bytesRef.current = null
+    keyIdRef.current = null
+    phaseRef.current = 'idle'
+  }
+  const begin = () => {
+    if (!permitted() || active.current) return null
+    const revision = ctx.session.revision
+    const run = { valid: (): boolean => active.current === run && permitted() && ctx.session.revision === revision }
+    active.current = run
+    return run
   }
 
   const setPhase = (p: Phase): void => {
@@ -110,13 +152,23 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
   }
 
   /** Peek keyId from fetched bytes, then decrypt if the key is available. */
-  const attemptDecrypt = async (): Promise<void> => {
+  const attemptDecrypt = async (existing?: { valid: () => boolean }): Promise<void> => {
+    const run = existing ?? begin()
+    if (!run || !run.valid()) return
     const bytes = bytesRef.current
-    if (!bytes) return
+    if (!bytes) { if (active.current === run) active.current = null; return }
+    let blobUrl: string | undefined
+    let keyId = ''
+    let key: CryptoKey | null = null
+    const current = (): boolean => {
+      try { return run.valid() && (!key || (ctx.session.getKey(keyId) === key && !!ctx.keyring.get(keyId))) }
+      catch { return false }
+    }
     try {
-      const keyId = peekBpencKeyId(bytes)
+      keyId = peekBpencKeyId(bytes) ?? ''
       if (!keyId) {
         // Not actually a BPENC1 container (or truncated) — treat as failure.
+        if (!run.valid()) return
         ctx.cache.set(cacheKey, { kind: 'failed', keyId: '' })
         bytesRef.current = null
         setPhase('done')
@@ -129,40 +181,62 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
         setPhase('unknown')
         return
       }
-      const key = ctx.session.getKey(keyId) // touches lastUsedAt on hit
+      key = ctx.session.getKey(keyId) // touches lastUsedAt on hit
       if (!key) {
         setPhase('locked')
         return
       }
 
-      const { header, data } = await decryptBpenc(key, bytes)
-      // A relock/stop during WebCrypto must not repopulate the plaintext cache.
-      if (ctx.session.getKey(keyId) !== key) { setPhase('locked'); return }
+      let decrypted
+      try {
+        decrypted = await decryptBpenc(key, bytes)
+      } catch (err) {
+        if (!current()) return
+        console.error('[BetterPrivacy] attachment decrypt failed', err)
+        ctx.cache.set(cacheKey, { kind: 'failed', keyId })
+        bytesRef.current = null
+        setPhase('done')
+        return
+      }
+      if (!current()) return
+      const { header, data } = decrypted
       const blob = new Blob([data as unknown as BlobPart], {
         type: header.mime || 'application/octet-stream',
       })
-      const blobUrl = URL.createObjectURL(blob)
+      blobUrl = URL.createObjectURL(blob)
       // Cache owns the blob URL from here: purge() revokes it (F3), LRU keeps
       // total media under settings.memoryBudgetMB.
       ctx.cache.set(cacheKey, { kind: 'media', blobUrl, header, keyId, byteSize: data.byteLength })
+      blobUrl = undefined // cache owns the URL only after a successful write
       bytesRef.current = null
       setPhase('done')
     } catch (err) {
-      // GCM auth failure (tampered/wrong key) or header parse failure.
-      console.error('[BetterPrivacy] attachment decrypt failed', err)
-      try {
-        ctx.cache.set(cacheKey, { kind: 'failed', keyId: keyIdRef.current ?? '' })
-      } catch {
-        // Cache write failed — the failure chip is recomputed next render.
+      // Blob/cache/runtime errors are retryable; they are not GCM failures.
+      if (blobUrl) {
+        try {
+          const stored = ctx.cache.get(cacheKey)
+          if (stored?.kind === 'media' && stored.blobUrl === blobUrl) ctx.cache.purge([keyId])
+        } catch { /* still revoke the untransferred URL below */ }
+        try { URL.revokeObjectURL(blobUrl) } catch { /* best effort */ }
       }
-      bytesRef.current = null
-      setPhase('done')
+      if (current()) { console.error('[BetterPrivacy] attachment processing failed', err); setPhase('fetchFailed') }
+    } finally {
+      if (active.current === run) {
+        const stale = !current()
+        active.current = null
+        if (stale && phaseRef.current === 'fetching') {
+          bytesRef.current = null
+          phaseRef.current = 'idle'
+          if (mounted.current && !owner.stopped) bump()
+        }
+      }
     }
   }
 
   /** Full pipeline: CDN fetch → attemptDecrypt. Used by both auto and manual paths. */
   const fetchAndDecrypt = async (): Promise<void> => {
-    if (phaseRef.current === 'fetching') return
+    const run = begin()
+    if (!run) return
     setPhase('fetching')
     try {
       const url: unknown = attachment?.url ?? attachment?.proxy_url
@@ -171,12 +245,20 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       // blocked by the browser. BdApi.Net.fetch runs in the main process and
       // is exempt. Main-process networking is required by this release.
       const res = await BdApi.Net.fetch(url)
+      if (!run.valid()) return
       if (!res.ok) throw new Error(`CDN fetch failed: HTTP ${res.status}`)
-      bytesRef.current = new Uint8Array(await res.arrayBuffer())
-      await attemptDecrypt()
+      const bytes = new Uint8Array(await res.arrayBuffer())
+      if (!run.valid()) return
+      bytesRef.current = bytes
+      await attemptDecrypt(run)
     } catch (err) {
-      console.error('[BetterPrivacy] attachment fetch failed', err)
-      setPhase('fetchFailed')
+      if (run.valid()) { console.error('[BetterPrivacy] attachment fetch failed', err); setPhase('fetchFailed') }
+    } finally {
+      if (active.current === run) {
+        const stale = !run.valid()
+        active.current = null
+        if (stale) { cancelWork(); if (mounted.current && !owner.stopped) bump() }
+      }
     }
   }
 
@@ -185,13 +267,17 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
   // lands back on a locked chip. After an unlock, a 'locked' chip that still
   // holds bytes retries decryption immediately.
   React.useEffect(() => {
+    mounted.current = true
+    const stop = (): void => { cancelWork(); bump() }
+    owner.cancel.add(stop)
     const handler = (): void => {
       try {
+        if (!permitted() || (active.current && !active.current.valid())) cancelWork()
         if (!ctx.cache.get(cacheKey)) {
           if (phaseRef.current === 'done') {
             phaseRef.current = 'idle'
             keyIdRef.current = null
-          } else if (phaseRef.current === 'locked' && bytesRef.current) {
+          } else if ((phaseRef.current === 'locked' || phaseRef.current === 'unknown') && bytesRef.current && permitted()) {
             void attemptDecrypt()
           }
         }
@@ -201,8 +287,13 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       bump()
     }
     window.addEventListener(RERENDER_EVENT, handler)
-    return () => window.removeEventListener(RERENDER_EVENT, handler)
-  }, [cacheKey])
+    return () => {
+      mounted.current = false
+      cancelWork()
+      owner.cancel.delete(stop)
+      window.removeEventListener(RERENDER_EVENT, handler)
+    }
+  }, [cacheKey, gateChannel])
 
   // Auto path: runs after every render but only fires from 'idle' with no
   // cache hit and an under-cap size (oversize is strictly manual).
@@ -238,7 +329,7 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
     )
   }
 
-  if (cached?.kind === 'media') {
+  if (cached?.kind === 'media' && ctx.session.getKey(cached.keyId) && ctx.keyring.get(cached.keyId)) {
     const header = cached.header
     const mime = header?.mime ?? ''
     const label = ((): string => {
@@ -276,6 +367,7 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
           className: 'bp-chip bp-save-button',
           onClick: () => {
             try {
+              if (!permitted() || !ctx.session.getKey(cached.keyId)) return
               const a = document.createElement('a')
               a.href = cached.blobUrl
               a.download = header?.filename || 'decrypted.bin'
@@ -310,12 +402,19 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       return chip('', t('att.decrypting'))
     case 'unknown':
       return chip('bp-chip-unknown', t('att.unknown', { keyId: keyId ?? '?' }), () => {
+        if (!permitted()) return
+        const revision = ctx.session.revision
         const bytes = bytesRef.current
         const salt = bytes ? peekBpencSalt(bytes) : null
         if (!bytes || !salt || !keyId) return
         void openRecoverKeyModal(ctx, { keyId, salt }, gateChannel,
-          (key) => decryptBpenc(key, bytes)).then((ok) => {
-            if (ok) void attemptDecrypt()
+          async (key) => {
+            if (!permitted() || ctx.session.revision !== revision || bytesRef.current !== bytes) throw new Error('BP_ATTACHMENT_CANCELLED')
+            const decrypted = await decryptBpenc(key, bytes)
+            if (!permitted() || ctx.session.revision !== revision || bytesRef.current !== bytes) throw new Error('BP_ATTACHMENT_CANCELLED')
+            return decrypted
+          }).then((ok) => {
+            if (ok && permitted() && ctx.session.revision === revision && bytesRef.current === bytes) void attemptDecrypt()
           }).catch(() => {})
       })
     case 'locked':
@@ -323,10 +422,11 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
         'bp-chip-locked',
         t('att.locked', { label: entry?.label ?? keyId ?? '?' }),
         () => {
-          if (!entry) return
+          if (!entry || !permitted()) return
+          const revision = ctx.session.revision
           openUnlockModal(ctx, entry)
             .then((ok: boolean) => {
-              if (ok) void attemptDecrypt()
+              if (ok && permitted() && ctx.session.revision === revision) void attemptDecrypt()
             })
             .catch(() => {
               // Modal failed — chip stays clickable.
@@ -380,6 +480,8 @@ function parseSizeText(text: string | null | undefined): number {
 
 function startAttachmentDomFallback(ctx: PluginContext): void {
   const mounts: Array<{ host: HTMLElement; card: HTMLElement; root: any }> = []
+  let disposed = false
+  let frame: number | null = null
 
   /** Undo the hide+mark applied in processAnchor so a card survives stop()/pruning. */
   const restoreCard = (card: HTMLElement): void => {
@@ -458,6 +560,7 @@ function startAttachmentDomFallback(ctx: PluginContext): void {
   }
 
   const scan = (): void => {
+    if (disposed) return
     try {
       cleanupDisconnected()
       const anchors = document.querySelectorAll(
@@ -473,9 +576,10 @@ function startAttachmentDomFallback(ctx: PluginContext): void {
   // constantly and querySelectorAll per mutation would be wasteful.
   let scheduled = false
   const observer = new MutationObserver(() => {
-    if (scheduled) return
+    if (disposed || scheduled) return
     scheduled = true
-    requestAnimationFrame(() => {
+    frame = requestAnimationFrame(() => {
+      frame = null
       scheduled = false
       scan()
     })
@@ -484,6 +588,8 @@ function startAttachmentDomFallback(ctx: PluginContext): void {
   scan()
 
   ctx.disposers.push(() => {
+    disposed = true
+    if (frame !== null) cancelAnimationFrame(frame)
     observer.disconnect()
     for (const m of mounts) {
       try {
@@ -501,6 +607,7 @@ function startAttachmentDomFallback(ctx: PluginContext): void {
 }
 
 export function applyAttachmentsPatch(ctx: PluginContext): void {
+  if (lifecycle(ctx).stopped) return
   const { modules } = ctx
 
   // Always-on DOM fallback (see comment above) — the webpack patch below is

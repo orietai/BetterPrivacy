@@ -21,7 +21,15 @@ or configuration migrations.
   other domains, non-HTTPS links, and unknown versions are rejected.
 - Discord sends split plaintext losslessly into 1,360-byte UTF-8 chunks.
   Each chunk becomes an independent v1 message and remains below 2,000 characters.
-- The browser composer creates one message/link within that same byte budget.
+- The browser composer splits longer plaintext into independent v1 links within
+  that same byte budget. Text readers preserve leading U+FEFF characters in
+  every part, so joining decrypted parts reproduces the original plaintext.
+- The browser reader authenticates every provided link before displaying the
+  combined plaintext and joins parts in pasted order. v1 does not authenticate
+  batch membership, order, or completeness: missing, reordered, or substituted
+  valid parts cannot be detected. Authentication does not establish the sender's
+  identity; anyone with the phrase can create valid parts. Duplicate links are
+  rejected by the batch UI, not by the wire protocol.
 
 ## Key derivation
 
@@ -32,7 +40,8 @@ non-extractable CryptoKeys and raw key buffers are cleared after use.
 For channel keys, salt is SHA-256 of
 `BetterPrivacy/v1/label-salt:` plus the trimmed, lowercased channel label,
 truncated to 16 bytes. The browser composer generates a fresh random salt per
-message. Both use the same envelope; recipients derive from the carried salt.
+submission, shared by all parts in that submission, with a fresh IV per part.
+Both use the same envelope; recipients derive from the carried salt.
 
 Keyring entries and current key export blobs retain salts as part of the
 current contract. They are not migration code. The phrase is not persisted.
@@ -66,7 +75,18 @@ Target current BetterDiscord APIs:
 - The submit-time validator and current paste-prompt prop are the composer
   integration points. Removed message-length getter APIs are not probed.
 - Message rendering uses current prop-name markers, not CSS-name source markers.
-- Upload interception reads and replaces `CloudUpload.item.file`.
+- Upload interception reads and replaces `CloudUpload.item.file`. Destination
+  channel metadata must be present and consistent on the queued upload/item;
+  the focused channel is never a substitute. If destination is unknown while
+  keys are configured, the upload is blocked instead of sent as plaintext.
+- Encrypted upload retries revalidate destination, session revision, unlocked
+  key, channel mode and sending-key selection before reaching the uploader.
+- Message edits authenticate the original envelope's key choice, preserve that
+  key and replace exactly one v1 message. Missing original state or oversized
+  edits block safely; edits never fan out into multiple messages.
+- Native encrypted edit entry points open a private editor prefilled by local
+  decryption. Plaintext drafts are not written into Discord's message or edit
+  stores. Cancelling sends nothing; locking or stopping clears the draft.
 
 DOM rendering paths, lazy-module retries, safe cancellation, and input
 validation remain: these handle current runtime state, not previous releases.

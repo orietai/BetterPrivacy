@@ -109,7 +109,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
   // go out PLAINTEXT no matter what the button says — surface that instead of
   // rendering a reassuring green bat.
   const sendBroken = ctx.modules.failed.some(
-    (f) => /send|MessageActions|upload|CloudUpload/i.test(f),
+    (f) => /send|edit(?:Composer)?:|MessageActions|MessageStore|upload|CloudUpload/i.test(f),
   )
   const availableKeys = channelId ? ctx.keyring.forChannel(channelId) : []
   // Use precisely the same policy as text/file sending: never the first of
