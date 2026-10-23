@@ -65,6 +65,27 @@ const CSS = `
 }
 
 /* ---- decrypted inline media (img / video / audio) ----------------------- */
+.bp-image-download {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.bp-image-download:focus-visible, .bp-save-button:focus-visible {
+  outline: 2px solid var(--interactive-active, #fff);
+  outline-offset: 3px;
+}
+.bp-decrypted-attachment > .bp-save-button {
+  display: block;
+  margin-top: 6px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
 .bp-decrypted-media {
   max-width: 400px;
   border: 2px solid var(${INDICATOR_PROP}, #3ba55d);
@@ -78,6 +99,10 @@ const CSS = `
   align-items: center;
   position: relative;
   margin: 0 4px;
+}
+.bp-bat-icon {
+  display: inline-block;
+  transform-origin: 50% 65%;
 }
 .bp-chatbar-btn {
   background: none;

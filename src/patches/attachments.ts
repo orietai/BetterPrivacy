@@ -350,14 +350,38 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
       }
     })()
     const title = t('att.decryptedTitle', { filename: header?.filename ?? 'file', label })
+    const saveLabel = t('att.save', { filename: header?.filename ?? 'file' })
+    const save = (event?: any): void => {
+      event?.preventDefault?.()
+      event?.stopPropagation?.()
+      try {
+        // A retained click handler must not expose an evicted/relocked file.
+        const current = ctx.cache.get(cacheKey)
+        if (!permitted() || !ctx.session.getKey(cached.keyId) || !ctx.keyring.get(cached.keyId) ||
+            current?.kind !== 'media' || current.blobUrl !== cached.blobUrl) return
+        const a = document.createElement('a')
+        a.href = cached.blobUrl
+        a.download = header?.filename || 'decrypted.bin'
+        document.body.appendChild(a)
+        try { a.click() } finally { a.remove() }
+      } catch (err) {
+        console.error('[BetterPrivacy] save failed', err)
+      }
+    }
+    const download = React.createElement('button', {
+      type: 'button', className: 'bp-chip bp-save-button', onClick: save,
+    }, saveLabel)
 
     let media: any
     if (mime.startsWith('image/')) {
-      media = React.createElement('img', {
+      media = React.createElement('button', {
+        type: 'button', className: 'bp-image-download', onClick: save,
+        'aria-label': saveLabel, title: saveLabel,
+      }, React.createElement('img', {
         className: 'bp-decrypted-media',
         src: cached.blobUrl,
         alt: header?.filename ?? 'decrypted image',
-      })
+      }))
     } else if (mime.startsWith('video/')) {
       media = React.createElement('video', {
         className: 'bp-decrypted-media',
@@ -371,28 +395,9 @@ function EncryptedAttachment(props: EncryptedAttachmentProps): any {
         src: cached.blobUrl,
       })
     } else {
-      media = React.createElement(
-        'button',
-        {
-          className: 'bp-chip bp-save-button',
-          onClick: () => {
-            try {
-              if (!permitted() || !ctx.session.getKey(cached.keyId)) return
-              const a = document.createElement('a')
-              a.href = cached.blobUrl
-              a.download = header?.filename || 'decrypted.bin'
-              document.body.appendChild(a)
-              a.click()
-              a.remove()
-            } catch (err) {
-              console.error('[BetterPrivacy] save failed', err)
-            }
-          },
-        },
-        t('att.save', { filename: header?.filename ?? 'file' }),
-      )
+      media = null
     }
-    return React.createElement('div', { className: 'bp-decrypted-attachment', title }, media)
+    return React.createElement('div', { className: 'bp-decrypted-attachment', title }, media, download)
   }
 
   if (cached?.kind === 'failed') {

@@ -557,6 +557,43 @@ describe('web create → share → open', () => {
     p.w.close()
   })
 
+  it('welcomes direct-link visitors without installation or a second link-loading step', async () => {
+    const creator = await makeLink('a public link with private contents')
+    const reader = page('m/index.html', new URL(creator.$('share-link').value).hash)
+    try {
+      expect(reader.$('box').hidden).toBe(false)
+      expect(reader.$('link-entry').open).toBe(false)
+      expect(reader.$('paste-form').closest('details')).toBe(reader.$('link-entry'))
+      expect(reader.$('box').closest('details')).toBeNull()
+      expect(reader.w.document.activeElement).not.toBe(reader.$('phrase'))
+      const cta = reader.w.document.querySelector('[data-copy="readerPluginCta"]')
+      expect(cta.getAttribute('href')).toBe('/#install')
+      expect(cta.getAttribute('target')).toBe('_blank')
+      expect(cta.getAttribute('rel')).toContain('noreferrer')
+      expect(reader.w.document.querySelector('[data-copy="readerPhraseHelp"]').textContent).toContain('not your Discord password')
+      reader.input('phrase', PHRASE)
+      for (const lang of ['tr', 'ru', 'en']) {
+        reader.w.document.querySelector('[data-lang="' + lang + '"]').click()
+        expect(cta.textContent).toBe({ tr: 'Discord eklentisini edin', ru: 'Установить плагин для Discord', en: 'Get the Discord plugin' }[lang])
+        expect(reader.$('phrase').value).toBe(PHRASE)
+        expect(reader.$('link-entry').open).toBe(false)
+      }
+      reader.submit('form')
+      await until(() => !reader.$('go').disabled)
+      expect(reader.$('result').textContent).toBe('a public link with private contents')
+      expect(reader.errors).toEqual([])
+    } finally { creator.w.close(); reader.w.close() }
+  })
+
+  it.each(['', '#v1.incomplete'])('keeps link entry available without a valid direct payload: %s', hash => {
+    const reader = page('m/index.html', hash)
+    try {
+      expect(reader.$('link-entry').open).toBe(true)
+      expect(reader.$('box').hidden).toBe(true)
+      expect(reader.$('empty').hidden).toBe(false)
+    } finally { reader.w.close() }
+  })
+
   it('reveals nothing on a wrong phrase and clears plaintext when the recipient leaves', async () => {
     const creator = await makeLink('only between us')
     const reader = page('m/index.html', new URL(creator.$('share-link').value).hash)

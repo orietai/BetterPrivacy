@@ -7,6 +7,8 @@
 <meta name="description" content="Open an encrypted BetterPrivacy message with its secret phrase. Everything decrypts in your browser — the payload never reaches any server.">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="/assets/bat-motion.css">
+<script src="/assets/bat-motion.js" defer></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦇</text></svg>">
 
 <meta property="og:type" content="website">
@@ -40,14 +42,15 @@
 <main class="tool-main" id="main">
 <aside class="tool-intro">
 <nav class="tool-tabs" aria-label="Message tools"><a href="/create/" data-copy="createTab">Create</a><a href="/m/" aria-current="page" data-copy="openTab">Open</a></nav>
-<h1 data-copy="readerTitle">A message just for you.</h1>
-<p data-copy="readerLead">Open the link. Enter the secret phrase. The message decrypts on your device.</p>
-<div class="tool-guide"><strong data-copy="nextTitle">What happens next?</strong><p data-copy="nextBody">Send the link in any chat. Share the phrase separately. Your recipient can open it on their phone without installing anything.</p><a class="text-link" href="/create/" data-copy="newMessage">Create a private message of your own.</a></div>
+<h1 data-copy="readerTitle">A message worth keeping private.</h1>
+<p data-copy="readerLead">This is BetterPrivacy: an encryption plugin for Discord. Someone shared an encrypted message with you. You can open it here, without installing anything.</p>
+<div class="reader-explainer"><strong data-copy="readerWhyTitle">Why a link instead of a message?</strong><p data-copy="readerWhy">BetterPrivacy turns text into an encrypted link before sending it. The link is public; the message inside needs the sender’s secret phrase.</p></div>
 </aside>
 <div class="reader-workspace">
   <div class="card-wrap" id="wrap">
     <div class="shell">
-      <div class="card">
+      <details class="card reader-links" id="link-entry" open>
+      <summary data-copy="readerLinks">Use another link or open multiple parts</summary>
       <!-- Keep link entry available for both direct links and pasted batches. -->
       <div id="empty" hidden>
         <h2 data-i18n="empty.title">🦇 Nothing to decrypt</h2>
@@ -70,11 +73,12 @@
           No accounts, no servers, no analytics. The encrypted payload travels in the URL
           fragment (the part after #), which your browser never sends to any server — including ours.
         </p>
-      </div>
+      </details>
 
       <!-- decrypt flow -->
       <div class="card" id="box" hidden>
         <h2 data-i18n="msg.title">🦇 Encrypted message</h2>
+        <p class="input-help reader-phrase-help" data-copy="readerPhraseHelp">Ask the sender for the secret phrase. This is not your Discord password. Installing the plugin won't unlock a message without its phrase.</p>
         <p class="input-help" id="batch-summary" role="status" aria-live="polite" hidden></p>
         <details class="message-details"><summary data-copy="messageDetails">Message details</summary><p class="keyid"><span data-i18n="msg.fp">key fingerprint</span> <b id="fp"></b> · AES-256-GCM</p></details>
         <div class="cipher-preview" id="preview"></div>
@@ -104,6 +108,14 @@
     </div>
   </div>
 
+  <section class="reader-plugin" aria-labelledby="reader-plugin-title">
+    <div class="reader-plugin-brand"><span aria-hidden="true">🦇</span> BetterPrivacy <span data-copy="readerPluginBadge">for Discord</span></div>
+    <h2 id="reader-plugin-title" data-copy="readerPluginTitle">Keep the conversation in Discord.</h2>
+    <p data-copy="readerPluginBody">With BetterPrivacy installed and the right phrase unlocked, messages open inside your chat. Send encrypted messages and files from the same place.</p>
+    <div class="actions"><a class="button" href="/#install" target="_blank" rel="noopener noreferrer" data-copy="readerPluginCta">Get the Discord plugin</a><a class="button secondary" href="/create/" data-copy="readerReply">Create an encrypted reply</a></div>
+    <p class="reader-plugin-note" data-copy="readerPluginNote">The plugin needs BetterDiscord on desktop. On mobile, use this page. Installation instructions open in a new tab so your message stays here.</p>
+  </section>
+
   <!-- .bpenc file decryption — always available -->
   <div class="card-wrap" id="fwrap"><span id="files"></span>
     <div class="shell">
@@ -126,6 +138,7 @@
             <div class="phrase-field">
               <input type="password" id="fphrase" autocomplete="off" autocapitalize="off" spellcheck="false"
                      data-i18n-ph="file.phrasePh" placeholder="the phrase this channel uses">
+              <button class="button secondary compact" type="button" id="show-file-phrase" aria-pressed="false" aria-controls="fphrase" data-copy="showPhrase">Show</button>
             </div>
             <button class="button block form-action" type="submit" id="fgo" data-i18n="file.decrypt">Decrypt</button>
           </form>
@@ -156,6 +169,8 @@
   // ── strings ────────────────────────────────────────────────────────────────
   var I18N = {
     en: {
+      'showPhrase': 'Show',
+      'hidePhrase': 'Hide',
       'empty.title': 'Open a private message',
       'empty.body': 'Paste one or more BetterPrivacy message links below, or choose an encrypted file further down.',
       'empty.malformed': 'The link you followed carries a payload this page doesn’t recognize — it may have been truncated while copying. Ask the sender to copy the whole message.',
@@ -194,6 +209,8 @@
       'footer.terms': 'Terms'
     },
     tr: {
+      'showPhrase': 'Göster',
+      'hidePhrase': 'Gizle',
       'empty.title': 'Özel bir mesaj aç',
       'empty.body': 'Aldığın BetterPrivacy mesaj bağlantılarını yapıştır veya aşağıdan şifreli bir dosya seç.',
       'empty.malformed': 'Takip ettiğin bağlantı, bu sayfanın tanımadığı bir veri taşıyor — kopyalanırken kırpılmış olabilir. Gönderenden mesajın tamamını kopyalamasını iste.',
@@ -232,6 +249,8 @@
       'footer.terms': 'Kullanım Şartları'
     },
     ru: {
+      'showPhrase': 'Показать',
+      'hidePhrase': 'Скрыть',
       'empty.title': 'Открыть приватное сообщение',
       'empty.body': 'Вставьте ссылки BetterPrivacy или выберите зашифрованный файл ниже.',
       'empty.malformed': 'Ссылка несёт данные, которые страница не распознаёт — возможно, они обрезались при копировании. Попросите отправителя скопировать сообщение целиком.',
@@ -369,6 +388,19 @@
   var copyGeneration = 0
   var copyTimer = null
 
+  function phraseVisibility(input, buttonId, visible) {
+    input.type = visible ? 'text' : 'password'
+    var button = document.getElementById(buttonId)
+    var key = visible ? 'hidePhrase' : 'showPhrase'
+    button.setAttribute('aria-pressed', String(visible))
+    button.setAttribute('data-copy', key)
+    button.textContent = t(key)
+  }
+  function resetPhrase(input, buttonId) {
+    input.value = ''
+    phraseVisibility(input, buttonId, false)
+  }
+
   // WebCrypto cannot be aborted: invalidate ownership before clearing the UI.
   // Every continuation (including errors and finally) must still own its flow.
   function clearMessage() {
@@ -407,25 +439,26 @@
     var m = FRAG_RE.exec(hash)
     return m ? { keyId: m[1], salt: m[2], iv: m[3], ct: m[4] } : null
   }
-  function loadParts(loaded) {
+  function loadParts(loaded, focusPhrase) {
     clearMessage()
     parts = loaded
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     empty.hidden = true
     box.hidden = false
+    document.getElementById('link-entry').open = false
     document.getElementById('fp').textContent = Array.from(new Set(loaded.map(function (p) { return p.keyId }))).join(', ')
     document.getElementById('preview').textContent = loaded.map(function (p) {
       return 'v1.' + p.keyId + '.' + p.salt + '.' + p.iv + '.' + p.ct
     }).join('\n')
     setStatus(batchStatus, loaded.length > 1 ? 'msg.batch' : '', false, { count: loaded.length })
     setStatus(msgStatus, 'msg.status.idle')
-    phraseInput.focus()
+    if (focusPhrase !== false) phraseInput.focus()
   }
 
   function boot() {
     clearMessage()
     parts = null
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     setStatus(msgStatus, 'msg.status.idle')
     setStatus(batchStatus, '')
     pasteStatus.el.removeAttribute('data-copy')
@@ -435,13 +468,15 @@
     document.getElementById('preview').textContent = ''
     var parsed = payload(location.hash)
     if (!parsed) {
+      document.getElementById('link-entry').open = true
       empty.hidden = false
       box.hidden = true
       document.getElementById('malformed-note').hidden = location.hash.length <= 1 || location.hash === '#files'
       return
     }
     pasteInput.value = 'https://betterprivacy.app/m' + location.hash
-    loadParts([parsed])
+    // Don't jump past the introduction or summon a mobile keyboard on entry.
+    loadParts([parsed], false)
   }
 
   document.getElementById('form').addEventListener('submit', async function (e) {
@@ -486,7 +521,7 @@
         } finally { if (buf) new Uint8Array(buf).fill(0) }
       }
       if (!current()) return
-      phraseInput.value = ''
+      resetPhrase(phraseInput, 'show-reader-phrase')
       result.textContent = decoded.join('') // No added separators; preserve the original text exactly.
       result.hidden = false
       result.focus()
@@ -535,15 +570,11 @@
   })
 
   document.getElementById('show-reader-phrase').addEventListener('click', function () {
-    var visible = phraseInput.type === 'password'
-    phraseInput.type = visible ? 'text' : 'password'
-    this.setAttribute('aria-pressed', String(visible))
-    this.setAttribute('data-copy', visible ? 'hidePhrase' : 'showPhrase')
-    if (window.BPUI) BPUI.refresh()
+    phraseVisibility(phraseInput, 'show-reader-phrase', phraseInput.type === 'password')
   })
   document.getElementById('forget-message').addEventListener('click', function () {
     clearMessage()
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     setStatus(msgStatus, 'msg.status.idle')
     phraseInput.focus()
   })
@@ -553,7 +584,7 @@
     clearMessage()
     parts = null
     box.hidden = true
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     setStatus(batchStatus, '')
     var tokens = pasteInput.value.trim().split(/\s+/)
     var loaded = [], hashes = [], seen = new Set()
@@ -592,7 +623,7 @@
     clearMessage()
     parts = null
     box.hidden = true
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     setStatus(batchStatus, '')
     document.getElementById('paste-status').removeAttribute('data-copy')
     setStatus(pasteStatus, '')
@@ -758,7 +789,7 @@
     clearResult()
     container = null
     fgo.disabled = false
-    fPhrase.value = ''
+    resetPhrase(fPhrase, 'show-file-phrase')
     fileUnlock.hidden = true
     setDropLine(null)
     setStatus(fileStatus, '')
@@ -807,6 +838,10 @@
     fileInput.value = ''
   })
 
+  document.getElementById('show-file-phrase').addEventListener('click', function () {
+    phraseVisibility(fPhrase, 'show-file-phrase', fPhrase.type === 'password')
+  })
+
   fPhrase.addEventListener('input', function () {
     fileGeneration++
     fgo.disabled = false
@@ -844,7 +879,7 @@
       if (!current()) return
 
       clearResult()
-      fPhrase.value = ''
+      resetPhrase(fPhrase, 'show-file-phrase')
       var mime = safeMime(out.header.mime)
       blobUrl = URL.createObjectURL(new Blob([out.data], { type: mime }))
       savedName = out.header.filename
@@ -881,10 +916,10 @@
 
   window.addEventListener('pagehide', function () {
     clearMessage()
-    phraseInput.value = ''
+    resetPhrase(phraseInput, 'show-reader-phrase')
     setStatus(msgStatus, 'msg.status.idle')
     fileGeneration++
-    fPhrase.value = ''
+    resetPhrase(fPhrase, 'show-file-phrase')
     fgo.disabled = false
     setStatus(fileStatus, '')
     clearResult()
@@ -895,6 +930,8 @@
     if (!I18N[code]) code = 'en'
     lang = code
     document.documentElement.lang = code
+    phraseVisibility(phraseInput, 'show-reader-phrase', phraseInput.type === 'text')
+    phraseVisibility(fPhrase, 'show-file-phrase', fPhrase.type === 'text')
     try { localStorage.setItem('bp-lang', code) } catch (_) {}
 
     var nodes = document.querySelectorAll('[data-i18n]')

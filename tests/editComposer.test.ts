@@ -175,8 +175,6 @@ describe('private edit composer', () => {
     m.change('changed privately 🦇')
     expect(m.options.confirmText).toBeNull()
     m.save.click()
-    m.options.onCloseCallback()
-    m.unmount()
     await done
     expect(h.nativeEdit).toHaveBeenCalledOnce()
     const [channelId, messageId, update] = h.nativeEdit.mock.calls[0]!
@@ -189,6 +187,42 @@ describe('private edit composer', () => {
     expect(h.dispatch).not.toHaveBeenCalled()
     expect(h.getByKeys).toHaveBeenCalledWith('openModal', 'closeModal')
     expect(h.closeModal).toHaveBeenCalledWith('modal')
+  })
+
+  it.each(['resolved', 'rejected', 'cancelled'])('retains the edited draft after a %s failure and allows retry', async failure => {
+    const h = await harness()
+    if (failure === 'resolved') h.nativeEdit.mockResolvedValueOnce({ ok: false })
+    else if (failure === 'rejected') h.nativeEdit.mockRejectedValueOnce(new Error('network'))
+    else h.nativeEdit.mockResolvedValueOnce(undefined)
+    const done = openEditMessageModal(h.ctx, CHANNEL, MESSAGE)
+    const m = await modal(h)
+    m.change('keep my correction')
+    m.save.click()
+    expect(m.save.disabled).toBe(true)
+    await vi.waitFor(() => expect(m.save.disabled).toBe(false))
+    expect(m.input.value).toBe('keep my correction')
+    expect(h.closeModal).not.toHaveBeenCalled()
+    m.save.click()
+    await done
+    expect(h.nativeEdit).toHaveBeenCalledTimes(2)
+    expect(m.input.value).toBe('')
+  })
+
+  it('does not restore a draft closed while a failed save is pending', async () => {
+    const h = await harness()
+    let reject!: (reason: Error) => void
+    h.nativeEdit.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail }))
+    const done = openEditMessageModal(h.ctx, CHANNEL, MESSAGE)
+    const m = await modal(h)
+    m.change('must be cleared')
+    m.save.click()
+    await vi.waitFor(() => expect(h.nativeEdit).toHaveBeenCalledOnce())
+    m.options.onCloseCallback()
+    await done
+    reject(new Error('offline'))
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(m.input.value).toBe('')
+    expect(m.save.disabled).toBe(true)
   })
 
   it('discards drafts on backdrop close and allows a fresh launch', async () => {

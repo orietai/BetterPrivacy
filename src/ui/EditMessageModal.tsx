@@ -7,6 +7,7 @@ import { openRecoverKeyModal, openUnlockModal } from './UnlockModal'
 interface Draft {
   value: string
   disabled: boolean
+  saving: boolean
   listeners: Set<() => void>
 }
 
@@ -60,16 +61,17 @@ function EditContent({ draft, valid, cancel, save }: { draft: Draft; valid: () =
     rows={8}
     aria-label={t('edit.dialogTitle')}
     value={draft.value}
-    disabled={draft.disabled}
+    disabled={draft.disabled || draft.saving}
     onChange={(event: any) => {
       if (!valid() || draft.disabled) { cancel(); return }
+      if (draft.saving) return
       draft.value = event.target.value
       bump()
     }}
   />
     <div className="bp-hint" aria-live="polite">{bytes} / {CHUNK_UTF8_BYTES} UTF-8 bytes</div>
     {oversize ? <div role="alert">{t('edit.oversize')}</div> : null}
-    <button type="button" disabled={draft.disabled || oversize} onClick={save}>{t('edit.save')}</button>
+    <button type="button" aria-busy={draft.saving} disabled={draft.disabled || draft.saving || oversize} onClick={save}>{t('edit.save')}</button>
   </div>
 }
 
@@ -90,7 +92,7 @@ export function openEditMessageModal(ctx: PluginContext, channelId: string, mess
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const launch: Launch = {
     cancelled: false,
-    draft: { value: '', disabled: true, listeners: new Set() },
+    draft: { value: '', disabled: true, saving: false, listeners: new Set() },
     finish() {
       if (launch.cancelled) return
       launch.cancelled = true
@@ -169,13 +171,27 @@ export function openEditMessageModal(ctx: PluginContext, channelId: string, mess
         if (new TextEncoder().encode(launch.draft.value).byteLength > CHUNK_UTF8_BYTES) return
         confirming = true
         const edited = launch.draft.value
-        clear(launch.draft)
+        launch.draft.saving = true
+        for (const notify of launch.draft.listeners) notify()
+        const failed = (): void => {
+          // A closed/invalidated editor must never resurrect its plaintext.
+          if (!valid()) { launch.finish(); return }
+          confirming = false
+          launch.draft.saving = false
+          for (const notify of launch.draft.listeners) notify()
+          toast('edit.failed')
+        }
         // Invoke immediately while the source/key checks still hold. The
         // protected action rechecks its own state across encryption awaits.
         try {
           const saving = actions.editMessage(channelId, messageId, { content: edited })
-          void Promise.resolve(saving).catch(() => toast('edit.failed')).finally(closeAfterSave)
-        } catch { toast('edit.failed'); closeAfterSave() }
+          void Promise.resolve(saving).then(result => {
+            // The protected action returns undefined when encryption/save was
+            // cancelled; Discord can resolve API errors instead of rejecting.
+            if (result == null || result.ok === false) failed()
+            else closeAfterSave()
+          }, failed)
+        } catch { failed() }
       }
       modalKey = BdApi.UI.showConfirmationModal(t('edit.dialogTitle'),
         <EditContent draft={launch.draft} valid={valid} cancel={() => launch.finish()} save={save} />, {
@@ -183,7 +199,7 @@ export function openEditMessageModal(ctx: PluginContext, channelId: string, mess
           cancelText: t('common.cancel'),
           onConfirm: save,
           onCancel: () => launch.finish(),
-          onCloseCallback: () => { if (!confirming) launch.finish() },
+          onCloseCallback: () => launch.finish(),
         })
     } catch {
       toast('edit.failed')

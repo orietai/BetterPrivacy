@@ -314,6 +314,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
       <Row label={t('km.lockdown')} hint={t('km.lockdownHint')}>
         <input
           type="checkbox"
+          aria-label={t('km.lockdown')}
           checked={settings.lockdown}
           onChange={(e: any) => patch({ lockdown: e.target.checked })}
         />
@@ -338,6 +339,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           type="number"
           min={0}
           value={timeoutDraft ?? String(settings.decryptTimeoutSec)}
+          aria-label={t('km.timeout')}
           onChange={(e: any) => setTimeoutDraft(e.target.value)}
           onBlur={() => commitTimeoutDraft()}
           onKeyDown={(e: any) => {
@@ -350,6 +352,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
       <Row label={t('km.indicator')} hint={t('km.indicatorHint')}>
         <input
           type="color"
+          aria-label={t('km.indicator')}
           value={settings.indicatorColor}
           onChange={(e: any) => patch({ indicatorColor: e.target.value })}
         />
@@ -364,6 +367,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           type="number"
           min={0}
           value={Math.round(settings.maxAutoDownloadBytes / MB)}
+          aria-label={t('km.maxAuto')}
           onChange={(e: any) =>
             patch({
               maxAutoDownloadBytes:
@@ -379,6 +383,7 @@ function KeyManagerPanel({ ctx }: { ctx: PluginContext }): JSX.Element {
           type="number"
           min={0}
           value={settings.memoryBudgetMB}
+          aria-label={t('km.memBudget')}
           onChange={(e: any) =>
             patch({ memoryBudgetMB: toNonNegativeInt(e.target.value, settings.memoryBudgetMB) })
           }

@@ -59,7 +59,24 @@
 .reader-workspace .drop { color: var(--muted); background: #07090c; border-color: #ebf0f833; }
 .reader-workspace .keyid b { color: var(--text); }
 .site-footer { margin-top: 25px; }
+/* Reader arrivals: phrase first, optional link tools second, plugin discovery
+   after the task. No modal, tracking, or installation gate. */
+#wrap > .shell { display: flex; flex-direction: column; gap: 16px; }
+#box { order: -1; }
+.reader-links > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.reader-links > summary:focus-visible { outline: 2px solid #8ed4a6; outline-offset: 6px; }
+.reader-explainer { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--line); }
+.reader-explainer strong { font-size: 14px; }
+.reader-explainer p { margin-top: 10px; font-size: 14px; }
+.reader-plugin { margin: 32px 0; padding: 28px 0; border-block: 1px solid var(--line); }
+.reader-plugin-brand { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 14px; font-weight: 650; }
+.reader-plugin-brand > span:last-child { color: var(--muted); font-weight: 400; }
+.reader-plugin h2 { margin: 16px 0 12px; font-size: clamp(24px, 3vw, 30px); line-height: 1.15; letter-spacing: -.025em; }
+.reader-plugin > p { color: var(--muted); font-size: 15px; line-height: 1.65; max-width: 55ch; }
+.reader-plugin .actions { margin-top: 20px; }
+.reader-plugin .reader-plugin-note { font-size: 12px; margin: 16px 0 0; }
 @media (max-width: 720px) {
+  .reader-explainer { margin: 18px 0 24px; padding-top: 14px; }
   .site-header { border-radius: 20px; padding: 12px 14px; }
   .site-nav { gap: 12px; }
   .tool-main { padding-top: 38px; }

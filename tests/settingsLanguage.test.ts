@@ -3,8 +3,9 @@ import { buildSettingsPanel } from '../src/ui/KeyManagerPanel'
 import { DEFAULT_SETTINGS } from '../src/settings'
 import type { KeyEntry, PluginContext } from '../src/types'
 import { injectStyles } from '../src/ui/indicators'
+import { setLocale, t } from '../src/i18n'
 
-afterEach(() => { vi.unstubAllGlobals() })
+afterEach(() => { setLocale('en'); vi.unstubAllGlobals() })
 
 function settingsPanel(lockdown = true, available = true, keys: KeyEntry[] = []) {
   let settings = { ...DEFAULT_SETTINGS, lockdown }
@@ -40,6 +41,22 @@ function settingsPanel(lockdown = true, available = true, keys: KeyEntry[] = [])
 }
 
 describe('settings dropdown host integration', () => {
+  it.each(['en', 'tr', 'ru'] as const)('names all five settings inputs with their corresponding translated Row labels in %s', lang => {
+    setLocale(lang)
+    const nodes = settingsPanel().render()
+    const inputs = nodes.filter(node => node.type === 'input')
+    expect(inputs).toHaveLength(5)
+    expect(inputs.map(input => input.props['aria-label'])).toEqual([
+      t('km.lockdown'), t('km.timeout'), t('km.indicator'), t('km.maxAuto'), t('km.memBudget'),
+    ])
+    const rows = nodes.filter(node => node.props?.label && node.props?.children?.some((child: any) => child?.type === 'input'))
+    expect(rows).toHaveLength(5)
+    for (const row of rows) {
+      const input = row.props.children.find((child: any) => child?.type === 'input')
+      expect(input.props['aria-label']).toBe(row.props.label)
+    }
+  })
+
   it('uses the same BetterDiscord DropdownInput for language and relock scope', () => {
     const h = settingsPanel()
     const fields = h.dropdowns()

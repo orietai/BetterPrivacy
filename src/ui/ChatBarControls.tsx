@@ -27,6 +27,63 @@ import { t } from '../i18n'
 /** Must match RERENDER_EVENT in index.ts (ctx.forceRerender broadcast). */
 const RERENDER_EVENT = 'bp-rerender'
 
+type BatFlutter = { play(): void; dispose(): void }
+const flutterOwners = new WeakMap<PluginContext, { stopped: boolean; effects: Set<BatFlutter> }>()
+
+/** Success feedback belongs to an explicit unlock, never to a render/state
+ * observer. WAAPI owns the short effect; no timers or document scans. */
+export function createBatFlutter(ctx: PluginContext, icon: () => HTMLElement | null): BatFlutter {
+  let owner = flutterOwners.get(ctx)
+  if (!owner) {
+    owner = { stopped: false, effects: new Set() }
+    flutterOwners.set(ctx, owner)
+    const owned = owner
+    ctx.disposers.push(() => {
+      owned.stopped = true
+      for (const effect of [...owned.effects]) effect.dispose()
+    })
+  }
+  const owned = owner
+  let disposed = false
+  let animation: Animation | null = null
+  const effect: BatFlutter = {
+    play() {
+      if (disposed || owned.stopped || animation) return
+      try {
+        const target = icon()
+        const view = target?.ownerDocument.defaultView
+        if (!target?.isConnected || typeof target.animate !== 'function' ||
+            !view?.matchMedia || view.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        const running = target.animate([
+          { transform: 'rotate(0deg) scaleX(1)' },
+          { transform: 'rotate(-8deg) scaleX(0.96)', offset: 0.3 },
+          { transform: 'rotate(6deg) scaleX(1.02)', offset: 0.65 },
+          { transform: 'rotate(0deg) scaleX(1)' },
+        ], { duration: 160, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' })
+        animation = running
+        running.onfinish = () => {
+          if (animation !== running) return
+          animation = null
+          running.onfinish = null
+          running.cancel()
+        }
+      } catch { /* Optional feedback must never affect unlocking. */ }
+    },
+    dispose() {
+      disposed = true
+      owned.effects.delete(effect)
+      const running = animation
+      animation = null
+      if (running) {
+        running.onfinish = null
+        try { running.cancel() } catch { /* Already removed by the host. */ }
+      }
+    },
+  }
+  owned.effects.add(effect)
+  return effect
+}
+
 function toast(message: string, type: 'info' | 'success' | 'warning' | 'error'): void {
   try {
     BdApi.UI.showToast(message, { type })
@@ -55,6 +112,10 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
   // clips overflow — an in-place absolute popover shows up as a bare shadow),
   // so outside-click detection needs its ref separately from rootRef.
   const popRef = useRef(null)
+  const batRef = useRef(null) as { current: HTMLElement | null }
+  const flutter = useRef(null) as { current: BatFlutter | null }
+  if (!flutter.current) flutter.current = createBatFlutter(ctx, () => batRef.current)
+  useEffect(() => () => flutter.current?.dispose(), [])
 
   // Re-render on channel switch and on global bp-rerender broadcasts
   // (unlock/relock), so the toggle color and key label track reality.
@@ -132,7 +193,8 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
    * channel end-to-end); locked → enter the phrase (arms on success);
    * unlocked → pause/resume encryption for this channel.
    */
-  const onBatClick = (): void => {
+  const onBatClick = (event: any): void => {
+    const celebrate = event?.detail > 0 // Keyboard activation/shortcuts stay still.
     if (sendBroken) {
       if (channelId && encOn) {
         ctx.keyring.setEncryptMode(channelId, false)
@@ -149,12 +211,12 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
     }
     if (!activeEntry) {
       if (availableKeys.length > 1) { setOpen(true); return }
-      void openChannelPhraseModal(ctx, channelId).then(() => bump())
+      setPhrase(celebrate)
       return
     }
     const entry = activeEntry
     if (!unlocked) {
-      void chooseKey(entry.id)
+      void chooseKey(entry.id, celebrate)
       return
     }
     if (ctx.keyring.getActiveSendKey(channelId) !== entry.id) {
@@ -167,21 +229,33 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
     refresh()
   }
 
-  const changePhrase = (): void => {
+  const changePhrase = (event: any): void => {
     setOpen(false)
+    setPhrase(event?.detail > 0)
+  }
+
+  const setPhrase = (celebrate: boolean): void => {
     if (!channelId) {
       noChannelToast()
       return
     }
-    void openChannelPhraseModal(ctx, channelId).then(() => bump())
+    const alreadyOpen = new Set(ctx.keyring.forChannel(channelId).filter(entry => ctx.session.isUnlocked(entry.id)).map(entry => entry.id))
+    void openChannelPhraseModal(ctx, channelId).then(entry => {
+      if (celebrate && entry && !alreadyOpen.has(entry.id) && ctx.session.isUnlocked(entry.id) &&
+          resolveCurrentChannelId(ctx.modules) === channelId) flutter.current?.play()
+      bump()
+    }).catch(() => toast(t('sending.failed'), 'error'))
   }
 
-  const chooseKey = async (id: string): Promise<void> => {
+  const chooseKey = async (id: string, celebrate = false): Promise<void> => {
     if (!channelId) return
+    const wasLocked = !ctx.session.isUnlocked(id)
     setOpen(false)
     try {
       const ok = await selectSendKey(ctx, channelId, id, entry => openUnlockModal(ctx, entry))
       if (ok) {
+        if (celebrate && wasLocked && ctx.session.isUnlocked(id) &&
+            resolveCurrentChannelId(ctx.modules) === channelId) flutter.current?.play()
         const entry = ctx.keyring.get(id)
         if (entry) toast(t('sending.selected', { label: sendKeyLabel(entry) }), 'success')
       } else if (sendBroken) toast(t('bar.broken'), 'error')
@@ -274,7 +348,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
           setOpen(!open)
         }}
       >
-        {'\u{1F987}'}
+        <span className="bp-bat-icon" ref={batRef}>{'\u{1F987}'}</span>
       </button>
       <button
         type="button"
@@ -341,7 +415,7 @@ function ChatBarControls({ ctx }: { ctx: PluginContext }): JSX.Element {
                 className={'bp-popover-item bp-key-choice' + (activeEntry?.id === entry.id ? ' bp-active' : '')}
                 aria-pressed={activeEntry?.id === entry.id}
                 disabled={sendBroken}
-                onClick={() => void chooseKey(entry.id)}>
+                onClick={(event: any) => void chooseKey(entry.id, event?.detail > 0)}>
                 <span aria-hidden="true">{activeEntry?.id === entry.id ? '✓' : ctx.session.isUnlocked(entry.id) ? '○' : '🔒'}</span>
                 <span>{sendKeyLabel(entry)}</span>
               </button>

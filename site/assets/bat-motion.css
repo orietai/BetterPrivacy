@@ -1,0 +1,36 @@
+/* One brief welcome, then small state indicators. Never a loading gate. */
+.bp-bat-welcome {
+  position: fixed; inset: 0; z-index: 100; pointer-events: none;
+  overflow: hidden; contain: strict;
+}
+.bp-bat-flight {
+  position: absolute; left: 50%; top: 42%; font-size: 30px; line-height: 1;
+  opacity: 0;
+  animation: bp-bat-depart 480ms var(--ease-out, cubic-bezier(.23,1,.32,1)) both;
+}
+@keyframes bp-bat-depart {
+  0% { opacity: 0; transform: translate3d(-50%,-50%,0) scale(.95); }
+  12% { opacity: .9; }
+  100% { opacity: 0; transform: translate3d(var(--bat-x),var(--bat-y),0) rotate(var(--bat-turn)) scale(.95); }
+}
+.button.bp-bat-busy { position: relative; }
+.bp-bat-working { pointer-events: none; position: absolute; inset: 0; }
+.bp-bat-working > span {
+  position: absolute; font-size: 16px; line-height: 1;
+  animation: bp-bat-hover 700ms linear infinite;
+}
+.bp-bat-working > span:nth-child(1) { left: 8px; top: -8px; }
+.bp-bat-working > span:nth-child(2) { right: 8px; top: -7px; animation-delay: -230ms; }
+.bp-bat-working > span:nth-child(3) { right: 28px; bottom: -7px; animation-delay: -460ms; }
+@keyframes bp-bat-hover {
+  0%, 100% { transform: translate3d(0,0,0) rotate(-8deg) scaleX(1); }
+  50% { transform: translate3d(3px,-4px,0) rotate(8deg) scaleX(.9); }
+}
+@media (max-width: 720px) {
+  .bp-bat-flight { font-size: 24px; }
+  .bp-bat-working > span:nth-child(3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bp-bat-welcome, .bp-bat-working { display: none !important; }
+  .bp-bat-flight, .bp-bat-working > span { animation: none !important; }
+}

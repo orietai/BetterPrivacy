@@ -122,6 +122,56 @@ describe('attachment active content isolation', () => {
   })
 })
 
+function renderedNodes(tree: any): any[] {
+  if (!tree || typeof tree !== 'object') return []
+  if (Array.isArray(tree)) return tree.flatMap(renderedNodes)
+  return [tree, ...renderedNodes(tree.props?.children)]
+}
+
+describe('decrypted media downloads', () => {
+  it.each(['image/png', 'image/jpeg', 'video/mp4', 'audio/mpeg', 'application/octet-stream'])('offers the original decrypted file for %s', async mime => {
+    const h = harness()
+    const value = opened()
+    value.header.mime = mime
+    value.header.filename = 'original-file'
+    vi.mocked(decryptBpenc).mockResolvedValue(value)
+    const downloaded: Array<{ url: string; filename: string }> = []
+    vi.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloaded.push({ url: this.href, filename: this.download })
+    })
+    h.start()
+    await vi.waitFor(() => expect(renderedNodes(h.host.tree).some(n => n.props?.className?.includes('bp-save-button'))).toBe(true))
+    const nodes = renderedNodes(h.host.tree)
+    const button = nodes.find(n => n.props?.className?.includes('bp-save-button'))
+    expect(button.props.type).toBe('button')
+    button.props.onClick()
+    expect(downloaded).toEqual([{ url: (h.cached() as any).blobUrl, filename: 'original-file' }])
+    expect(document.querySelector('a[download]')).toBeNull()
+    if (mime.startsWith('image/')) {
+      const image = nodes.find(n => n.props?.className === 'bp-image-download')
+      expect(image.props['aria-label']).toContain('original-file')
+      image.props.onClick()
+      expect(downloaded).toHaveLength(2)
+    }
+    if (mime.startsWith('video/') || mime.startsWith('audio/')) {
+      expect(nodes.find(n => n.type === mime.split('/')[0]).props.controls).toBe(true)
+    }
+  })
+
+  it.each(['off', 'lock', 'stop', 'evict', 'unmount'] as const)('blocks retained download actions after %s', async action => {
+    const h = harness()
+    const click = vi.spyOn(window.HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    h.start()
+    await vi.waitFor(() => expect(renderedNodes(h.host.tree).some(n => n.props?.className?.includes('bp-save-button'))).toBe(true))
+    const save = renderedNodes(h.host.tree).find(n => n.props?.className?.includes('bp-save-button')).props.onClick
+    if (action === 'evict') h.cache.purge('all')
+    else if (action === 'unmount') h.host.unmount()
+    else h[action]()
+    save()
+    expect(click).not.toHaveBeenCalled()
+  })
+})
+
 describe('attachment lifecycle flows', () => {
   it.each(['off', 'lock', 'stop'] as const)('ignores a pending download completing after %s', async action => {
     const h = harness()

@@ -144,6 +144,73 @@ function openPage(hash = '', configure?: (window: any) => void): Page {
 }
 
 describe('decrypt page: it loads and wires itself up', () => {
+  it.each([
+    ['en', 'Show', 'Hide'], ['tr', 'Göster', 'Gizle'], ['ru', 'Показать', 'Скрыть'],
+  ])('toggles both phrase controls and preserves localized visibility state in %s', async (lang, show, hide) => {
+    const page = openPage(fragment)
+    await page.loadFile(container, 'photo.bpenc')
+    page.window.document.querySelector('[data-lang="' + lang + '"]').click()
+    for (const [inputId, buttonId] of [['phrase', 'show-reader-phrase'], ['fphrase', 'show-file-phrase']]) {
+      const input = page.$(inputId), button = page.$(buttonId)
+      input.value = 'keep this phrase'
+      expect(button.classList.contains('secondary')).toBe(true)
+      expect(button.classList.contains('compact')).toBe(true)
+      expect(button.getAttribute('aria-controls')).toBe(inputId)
+      expect(input.type).toBe('password')
+      expect(button.textContent).toBe(show)
+      button.click()
+      expect(input.type).toBe('text')
+      expect(input.value).toBe('keep this phrase')
+      expect(button.textContent).toBe(hide)
+      expect(button.getAttribute('aria-pressed')).toBe('true')
+      page.window.document.querySelector('[data-lang="' + lang + '"]').click()
+      expect(button.textContent).toBe(hide)
+      expect(input.type).toBe('text')
+      button.click()
+      expect(input.type).toBe('password')
+      expect(button.textContent).toBe(show)
+      expect(button.getAttribute('aria-pressed')).toBe('false')
+    }
+  })
+
+  it.each(['forget', 'pagehide', 'new draft', 'new hash'])('clears and remasks the reader phrase on %s with a localized Show label', async action => {
+    const page = openPage(fragment)
+    page.window.document.querySelector('[data-lang="tr"]').click()
+    page.$('phrase').value = 'old exposed phrase'
+    page.$('show-reader-phrase').click()
+    expect(page.$('phrase').type).toBe('text')
+    if (action === 'forget') page.$('forget-message').click()
+    if (action === 'pagehide') page.window.dispatchEvent(new page.window.Event('pagehide'))
+    if (action === 'new draft') {
+      page.$('paste-link').value = 'new draft'
+      page.$('paste-link').dispatchEvent(new page.window.Event('input', { bubbles: true }))
+    }
+    if (action === 'new hash') {
+      page.window.location.hash = '#files'
+      await vi.waitFor(() => expect(page.$('phrase').value).toBe(''))
+    }
+    expect(page.$('phrase').value).toBe('')
+    expect(page.$('phrase').type).toBe('password')
+    expect(page.$('show-reader-phrase').getAttribute('aria-pressed')).toBe('false')
+    expect(page.$('show-reader-phrase').getAttribute('data-copy')).toBe('showPhrase')
+    expect(page.$('show-reader-phrase').textContent).toBe('Göster')
+  })
+
+  it.each(['new file', 'invalid file', 'pagehide'])('clears and remasks the file phrase on %s with a localized Show label', async action => {
+    const page = openPage()
+    await page.loadFile(container, 'photo.bpenc')
+    page.window.document.querySelector('[data-lang="ru"]').click()
+    page.$('fphrase').value = 'old exposed file phrase'
+    page.$('show-file-phrase').click()
+    if (action === 'pagehide') page.window.dispatchEvent(new page.window.Event('pagehide'))
+    else await page.loadFile(action === 'new file' ? container : new Uint8Array([0]), 'next.bpenc')
+    expect(page.$('fphrase').value).toBe('')
+    expect(page.$('fphrase').type).toBe('password')
+    expect(page.$('show-file-phrase').getAttribute('aria-pressed')).toBe('false')
+    expect(page.$('show-file-phrase').getAttribute('data-copy')).toBe('showPhrase')
+    expect(page.$('show-file-phrase').textContent).toBe('Показать')
+  })
+
   it.each(['text/html', 'image/svg+xml', 'application/xhtml+xml'])('downloads authenticated %s content as an inert blob without a preview', async mime => {
     const salt = await deriveSaltFromLabel(CHANNEL_LABEL)
     const { key, keyId } = await deriveKeyMaterial(PASS, salt)
