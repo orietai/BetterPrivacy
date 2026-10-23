@@ -98,6 +98,27 @@ function sendResultFailed(res: any): boolean {
   return res != null && typeof res === 'object' && res.ok === false
 }
 
+/** Keep Discord's send-call signature, including flags/options in trailing
+ * positions. Only the first part owns the original reply, files and nonce.
+ * Never mutate the composer's objects: they may be frozen or reused by Discord. */
+function continuationArgs(args: any[], content: string): any[] {
+  const cloneOptions = (value: any): any => {
+    if (!value || typeof value !== 'object' || Array.isArray(value) ||
+        Object.getPrototypeOf(value) !== Object.prototype) return value
+    const copy = { ...value }
+    for (const field of ['nonce', 'messageReference', 'message_reference', 'reply', 'attachments', 'uploads', 'stickerIds', 'sticker_ids']) {
+      delete copy[field]
+    }
+    return copy
+  }
+  const next = args.map(cloneOptions)
+  next[1] = {
+    ...cloneOptions(args[1]), content, tts: false,
+    invalidEmojis: [], validNonShortcutEmojis: [],
+  }
+  return next
+}
+
 /**
  * Encrypts `plaintext` with `key` and forwards to the original sendMessage —
  * auto-splitting into as many wire messages as the text needs when it doesn't
@@ -182,34 +203,32 @@ function encryptThenSend(
       }
     }
 
-    // Multi-part: part 1 keeps the original args; follow-ups are minimal
-    // fresh message objects (no reply reference duplication, no stickers).
+    // Multi-part: preserve the native positional arguments for EVERY part.
+    // Calling follow-ups with only (channelId, message) drops Discord options
+    // and can reject part 2 even though the first message succeeded.
     toast(t('send.sendingParts', { n: wires.length }), 'info')
-    const channelId = args[0]
+    let firstResult: any
     for (let i = 0; i < wires.length; i++) {
       if (!stillUnlocked()) { toast(t(requireSelected ? 'sending.cancelled' : 'send.cancelledLocked'), 'warning'); return undefined }
       const partArgs =
         i === 0
           ? firstArgs
-          : [
-              channelId,
-              {
-                content: wires[i]!,
-                tts: false,
-                invalidEmojis: [],
-                validNonShortcutEmojis: [],
-              },
-            ]
+          : continuationArgs(args, wires[i]!)
       try {
         const res = await Promise.resolve(Reflect.apply(original, thisObj, partArgs))
-        if (sendResultFailed(res)) throw new Error('BP_PART_SEND_FAILED')
+        if (sendResultFailed(res)) {
+          toast(t('send.partFailed', { i: i + 1, n: wires.length }), 'error')
+          return res
+        }
+        if (i === 0) firstResult = res
       } catch (err) {
         console.error(`[BetterPrivacy] part ${i + 1}/${wires.length} failed to send`, err)
         toast(t('send.partFailed', { i: i + 1, n: wires.length }), 'error')
         return undefined
       }
     }
-    return undefined
+    // Preserve the first message's native result for the original composer.
+    return firstResult
   })()
 }
 

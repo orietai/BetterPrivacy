@@ -288,8 +288,44 @@ describe('plugin send → share', () => {
     }))
     expect(opened.join('')).toBe(text)
     expect(calls[0]![2]).toEqual({ reply: 'reference' })
-    expect(calls[1]).toHaveLength(2)
+    expect(calls[1]).toHaveLength(3)
+    expect(calls[1]![2]).toEqual({})
     expect(message.content).toBe(text)
+  })
+
+  it('preserves native positional options for every part without reusing reply/files/nonce', async () => {
+    const h = harness()
+    await h.arm()
+    const options = Object.freeze({ messageReference: { message_id: 'reply' }, nonce: 'original', transportFlag: true })
+    const message = Object.freeze({ content: 'x'.repeat(4000), nonce: 'original', attachments: [{ id: 'file' }], customFlag: true })
+    let count = 0
+    const nonces = new Set<string>()
+    h.original.mockImplementation(async (...args: any[]) => {
+      // Current Discord reads the fourth argument directly: i.nonce ?? generate().
+      // Missing options must throw, matching the user's live function source.
+      const nonce = args[3].nonce ?? `generated-${count}`
+      expect(nonces.has(nonce)).toBe(false)
+      nonces.add(nonce)
+      if (args.length !== 4 || args[2] !== false || args[3]?.transportFlag !== true || !args[1].customFlag) {
+        return { ok: false }
+      }
+      count++
+      if (count > 1) {
+        expect(args[1]).not.toHaveProperty('nonce')
+        expect(args[1]).not.toHaveProperty('attachments')
+        expect(args[3]).not.toHaveProperty('messageReference')
+        expect(args[3]).not.toHaveProperty('nonce')
+      }
+      return { ok: true, id: String(count) }
+    })
+    applySendPatch(h.ctx)
+    const result = await h.actions.sendMessage(CHANNEL, message, false, options)
+    expect(count).toBe(3)
+    expect(nonces.size).toBe(3)
+    expect(result).toEqual({ ok: true, id: '1' })
+    expect(options.messageReference.message_id).toBe('reply')
+    expect(message.attachments).toEqual([{ id: 'file' }])
+    expect(h.toasts.mock.calls.some(call => call[1]?.type === 'error')).toBe(false)
   })
 
   it('a declined many-part confirmation sends nothing', async () => {
@@ -306,7 +342,8 @@ describe('plugin send → share', () => {
     await h.arm()
     h.original.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false })
     applySendPatch(h.ctx)
-    await h.actions.sendMessage(CHANNEL, { content: 'a'.repeat(6000) })
+    const result = await h.actions.sendMessage(CHANNEL, { content: 'a'.repeat(6000) })
+    expect(result).toEqual({ ok: false })
     expect(h.original).toHaveBeenCalledTimes(2)
     expect(h.toasts.mock.calls.some((call) => call[1]?.type === 'error')).toBe(true)
   })
