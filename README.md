@@ -40,7 +40,11 @@ A BetterDiscord plugin that adds **client-side end-to-end encryption** to Discor
 
 ### Build
 
+Clone the repository and use a current Node.js LTS release (Node.js 24 recommended):
+
 ```bash
+git clone https://github.com/orietai/BetterPrivacy.git
+cd BetterPrivacy
 npm ci
 npm run build
 ```
@@ -133,7 +137,7 @@ Toggle in **Settings** → **BetterPrivacy** → **Lockdown mode**.
 
 ### 7. Channel-Specific Settings
 
-- **Chat bar:** the lock button and key dropdown are per-channel. Encrypt mode + active key are remembered.
+- **Chat bar:** the single 🦇 button controls the current channel. Encrypt mode and active key are remembered; right-click for more options.
 - **Context menu:** right-click a channel to set a default encryption key for that channel (future messages default to that key).
 
 ### 8. Long Messages
@@ -306,7 +310,7 @@ A: The attacker can read any currently unlocked keys and decrypt past messages t
 
 **Q: Does BetterPrivacy work on mobile Discord?**
 
-A: No. BetterDiscord (and thus BetterPrivacy) is a desktop client modification only.
+A: The plugin runs only in desktop Discord. On mobile, open a shared message link in your browser and enter the phrase, or create a message at [betterprivacy.app/create/](https://betterprivacy.app/create/) and share its link back to Discord.
 
 **Q: Can I encrypt reactions or polls?**
 
@@ -326,11 +330,11 @@ A: **Settings → BetterPrivacy → Language** — Auto (follow Discord), Englis
 
 **Q: How large can encrypted files be?**
 
-A: Up to your Discord upload limit (typically 10 MB free, 50 MB+ with Nitro). Files are encrypted in 8 MB chunks to avoid blocking the renderer.
+A: The plugin caps plaintext files at 64 MiB; Discord's account upload limit also applies, including encryption overhead. Files use independently authenticated 8 MiB chunks.
 
 **Q: Is my keyring encrypted at rest?**
 
-A: By default, no. Keyring metadata (salt, label, key ID, scope) is stored plaintext in `BdApi.Data`. Toggle **Master passphrase** in settings to encrypt the entire keyring JSON (optional).
+A: Keyring metadata (salt, label, key ID, scope) is stored unencrypted in `BdApi.Data`. Secret phrases and derived keys are not persisted. Master-passphrase protection is not available in this version.
 
 ---
 
@@ -342,9 +346,16 @@ A: By default, no. Keyring metadata (salt, label, key ID, scope) is stored plain
 
 ## Need Help?
 
-- Read the [Build Spec](./BetterPrivacy-Build-Spec.md) for technical details.
+- Read the [v1 protocol contract](./PRE-LAUNCH-REVIEW.md) for message and attachment format details.
 - Check for Discord/BetterDiscord updates if you see "BetterPrivacy degraded" toasts.
-- Report issues on the project repository.
+- Report reproducible bugs in [GitHub Issues](https://github.com/orietai/BetterPrivacy/issues). Do not include secret phrases or private messages.
+
+## Contributing and security
+
+Source code, website and tests are published under the MIT license. See
+[CONTRIBUTING.md](./CONTRIBUTING.md) for setup and pull requests, and
+[SECURITY.md](./SECURITY.md) for responsible vulnerability reporting.
+The project has not undergone an independent security audit.
 
 ---
 

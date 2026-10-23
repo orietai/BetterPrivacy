@@ -37,11 +37,13 @@ folder; a redirect from `/m` to `/m/` is fine if it keeps the fragment.
 
 The landing page leads with the desktop Discord plugin. Browser creation and
 opening support mobile users and recipients without the plugin. A two-column hero keeps the
-product illustration beside the explanation, with no autoplay or decorative
-canvas. The reveal is an accessible button, not a hover-only interaction.
+product illustration beside the explanation. The original animated Discord
+demo, cursor decryption lens, scroll reveals and headline redaction are retained.
+Reduced-motion preferences show a static readable state. The statement reveal
+also has a keyboard-accessible button instead of depending on hover alone.
 
 Create and Open share navigation, language controls, typography, form controls,
-and a light reading surface on a dark background. On phones the introduction
+and dark reading surfaces in the landing page's black/green palette. On phones the introduction
 moves above the form. Buttons have visible keyboard focus; errors appear next
 to the action with live status announcements. Clipboard denial selects the
 link for manual copying. Native sharing is offered when supported.

@@ -9,6 +9,14 @@ node_modules/
 .agents/
 .claude/
 skills-lock.json
+BetterPrivacy-Build-Spec.md
+
+# local credentials and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
 
 # OS noise
 .DS_Store
