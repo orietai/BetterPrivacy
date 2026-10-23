@@ -100,6 +100,10 @@ Tell them the phrase — **outside Discord** (in person, or over any encrypted m
 - Keys stay unlocked while you're active; after 3 hours idle (configurable) everything re-locks.
 - **Ctrl+Shift+L** (or right-click the 🦇 → "Lock everything now") locks instantly.
 - When locked, messages show as chips; click the 🦇 (or a chip) and re-enter the phrase.
+- A successful unlock also tries that phrase against saved keys available in the
+  current channel. Matching history keys open together; other phrases stay
+  locked and the sending selection does not change. The phrase is discarded
+  after this attempt. Keys not yet saved still need recovery from their message.
 
 ### 4. Choose Which Key Sends
 
@@ -339,6 +343,10 @@ A: The attacker can read any currently unlocked keys and decrypt past messages t
 **Q: Does BetterPrivacy work on mobile Discord?**
 
 A: The plugin runs only in desktop Discord. On mobile, open a shared message link in your browser and enter the phrase, or create a message at [betterprivacy.app/create/](https://betterprivacy.app/create/) and share its link back to Discord.
+
+For short, single-link messages, the browser composer also offers a locally
+generated QR code and an image download. It contains the encrypted link only;
+share the phrase separately. Longer or multipart messages use copy/share.
 
 **Q: Can I encrypt reactions or polls?**
 

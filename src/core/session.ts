@@ -6,7 +6,7 @@
  * BdApi.Data.
  */
 
-import { PLUGIN_NAME, type KeyEntry, type Keyring, type RelockReason, type Session, type SettingsStore } from '../types'
+import { PLUGIN_NAME, type KeyEntry, type Keyring, type PluginContext, type RelockReason, type Session, type SettingsStore } from '../types'
 import { deriveKeyMaterial } from '../crypto/kdf'
 import { t } from '../i18n'
 
@@ -16,6 +16,44 @@ const SWEEP_INTERVAL_MS = 60_000
  * of every other reader using this key. Keep the public Session API unchanged. */
 export function unlockIfCurrent(session: Session, entry: KeyEntry, phrase: string, current: () => boolean): Promise<boolean> {
   return (session.unlock as (entry: KeyEntry, phrase: string, current?: () => boolean) => Promise<boolean>)(entry, phrase, current)
+}
+
+/** Finite, sequential history unlock. The phrase lives only in this operation;
+ * selection, mode, metadata and keys belonging to other channels are untouched. */
+export async function unlockChannelKeys(
+  ctx: PluginContext, channelId: string | null, phrase: string, primaryId: string, current: () => boolean,
+): Promise<number> {
+  const { session, keyring } = ctx
+  const revision = session.revision
+  const selectedChannel = ctx.modules.SelectedChannelStore?.getChannelId?.()
+  const primaryKey = session.getKey(primaryId)
+  const savedPrimary = keyring.get(primaryId)
+  const primary = savedPrimary ? { ...savedPrimary } : undefined
+  const valid = (): boolean => current() && ctx.session === session && ctx.keyring === keyring &&
+    session.revision === revision && ctx.modules.SelectedChannelStore?.getChannelId?.() === selectedChannel &&
+    !!primaryKey && session.getKey(primaryId) === primaryKey && !!primary &&
+    keyring.get(primaryId)?.salt === primary.salt && keyring.get(primaryId)?.check === primary.check &&
+    keyring.get(primaryId)?.scope === primary.scope
+  if (!valid()) return 0
+  if (!channelId) return 1
+  // Snapshot once: additions during the batch cannot extend its lifetime.
+  const candidates = keyring.forChannel(channelId)
+    .filter(entry => entry.id !== primaryId && (entry.scope === 'global' || entry.scope === channelId))
+    .map(entry => ({ ...entry }))
+  let count = 1
+  for (const entry of candidates) {
+    const unchanged = (): boolean => {
+      const saved = keyring.get(entry.id)
+      return valid() && saved?.salt === entry.salt && saved?.check === entry.check && saved?.scope === entry.scope
+    }
+    if (!unchanged()) break
+    if (session.isUnlocked(entry.id)) continue
+    let unlocked = false
+    try { unlocked = await unlockIfCurrent(session, entry, phrase, unchanged) } catch { /* Unrelated keys must not fail the primary unlock. */ }
+    if (!unchanged()) break
+    if (unlocked) count++
+  }
+  return count
 }
 
 interface UnlockedKey {
@@ -76,7 +114,7 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
       if (stopped || !current()) return false
       const started = generation
       const keyStarted = keyGenerations.get(entry.id) ?? 0
-      const { id, salt, check } = entry
+      const { id, salt, check, scope } = entry
       let derived
       try {
         derived = await deriveKeyMaterial(passphrase, salt)
@@ -89,7 +127,7 @@ export function createSession(keyring: Keyring, settings: SettingsStore): Sessio
       if (derived.kcv !== check || derived.keyId !== id) return false
       const saved = keyring.get(id)
       if (stopped || !current() || generation !== started || (keyGenerations.get(id) ?? 0) !== keyStarted ||
-          saved?.salt !== salt || saved?.check !== check) return false
+          saved?.salt !== salt || saved?.check !== check || saved?.scope !== scope) return false
       const now = Date.now()
       unlocked.set(entry.id, { key: derived.key, unlockedAt: now, lastUsedAt: now })
       return true

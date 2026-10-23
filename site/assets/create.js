@@ -10,6 +10,7 @@
   var busy = false;
   var revision = 0;
   var links = [];
+  var qrUrl = null;
   var MAX_BYTES = 1360; // Plugin CHUNK_UTF8_BYTES: one link fits Discord's 2,000 characters.
   var ui = window.BPUI;
   function say(id, key, error) {
@@ -45,11 +46,61 @@
     return chunks;
   }
   function budget() {
+    $('qr-image').alt = ui.text('qrAlt');
     var count = chunkPlaintext(message.value).length;
     $('message-budget').textContent = byteLength(message.value).toLocaleString(document.documentElement.lang) +
       ' ' + ui.text('bytesLabel') + ' · ' + count + ' ' + ui.text(count > 1 ? 'linksCount' : 'linkCount');
   }
+  function clearQr() {
+    $('qr-panel').hidden = true;
+    $('qr-image').removeAttribute('src');
+    $('download-qr').removeAttribute('href');
+    $('show-qr').hidden = true;
+    $('show-qr').setAttribute('aria-expanded', 'false');
+    $('show-qr').setAttribute('data-copy', 'qrShow');
+    $('show-qr').textContent = ui.text('qrShow');
+    $('qr-limit').hidden = true;
+    $('qr-status').textContent = '';
+    $('qr-status').removeAttribute('data-copy');
+    $('qr-status').classList.remove('err');
+    if (qrUrl) { URL.revokeObjectURL(qrUrl); qrUrl = null; }
+  }
+  $('show-qr').addEventListener('click', function () {
+    if (generated.hidden || links.length !== 1 || !window.BPQR || !BPQR.canEncode(links[0])) return;
+    if (!$('qr-panel').hidden) {
+      clearQr();
+      $('show-qr').hidden = false;
+      return;
+    }
+    try {
+      var svg = BPQR.svg(links[0]);
+      qrUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      var url = qrUrl, started = revision;
+      // A fresh node owns each load; an old image error must not clear a new QR.
+      var image = $('qr-image').cloneNode(false);
+      image.onerror = function () {
+        if (revision !== started || qrUrl !== url) return;
+        clearQr();
+        $('show-qr').hidden = false;
+        say('qr-status', 'qrFailed', true);
+      };
+      $('qr-image').replaceWith(image);
+      image.src = qrUrl;
+      $('download-qr').href = qrUrl;
+      $('qr-panel').hidden = false;
+      $('qr-status').textContent = '';
+      $('qr-status').removeAttribute('data-copy');
+      $('qr-status').classList.remove('err');
+      $('show-qr').setAttribute('aria-expanded', 'true');
+      say('show-qr', 'qrHide');
+    } catch (_) {
+      clearQr();
+      $('show-qr').hidden = false;
+      say('qr-status', 'qrFailed', true);
+    }
+  });
   function clearLink() {
+    clearQr();
     links = [];
     generated.hidden = true;
     $('share-link').value = '';
@@ -156,6 +207,8 @@
       $('open-created').hidden = multi;
       $('share-native').hidden = typeof navigator.share !== 'function';
       generated.hidden = false;
+      $('show-qr').hidden = multi || !window.BPQR || !BPQR.canEncode(links[0]);
+      $('qr-limit').hidden = !$('show-qr').hidden;
       say('create-status', multi ? 'encryptedMany' : 'encrypted');
       $('generated-title').focus();
     } catch (_) {

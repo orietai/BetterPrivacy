@@ -18,6 +18,7 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Discord plugin
 
+- One successful phrase entry opens matching saved history keys in the current channel without changing the sending selection.
 - Remove unused master-passphrase and link-preview settings; keep media limits in a collapsed settings section.
 - Keyboard activation and visible focus for encrypted-message and attachment controls; channel key labels use readable names with distinct key IDs.
 - Key import respects intervening locks and plugin shutdown before automatically unlocking; active-content attachments are downloaded with an inert MIME type.
@@ -46,6 +47,7 @@ First public release. No earlier BetterPrivacy version or format is supported.
 
 ### Website
 
+- Local QR display and download for short, single-link encrypted messages; the phrase is never included.
 - Static-host frame, MIME, referrer and browser-permission restrictions; release verification checks the required header configuration.
 - Reduced-motion reveal controls remain interactive; leaving the composer remasks phrases; native sharing handles unusual rejection values safely.
 - Editing a file's phrase clears decrypted previews and invalidates pending decryption, including late failures.

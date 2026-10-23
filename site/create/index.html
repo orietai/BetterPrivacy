@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/assets/tools-skin.css">
 <link rel="stylesheet" href="/assets/controls.css">
 <script src="/assets/site.js" defer></script>
+<script src="/assets/qr-vendor.js" defer></script>
 <script src="/assets/create.js" defer></script>
 <meta name="author" content="oriet.ai">
 <link rel="author" href="https://oriet.ai/">
@@ -50,6 +51,15 @@
 <textarea id="share-link" readonly rows="3" spellcheck="false" aria-describedby="share-status"></textarea>
 <div class="actions"><button class="button" type="button" id="copy-link" data-copy="copyLink">Copy link</button><button class="button secondary" type="button" id="share-native" data-copy="shareLink" hidden>Share…</button><a class="button secondary" id="open-created" target="_blank" rel="noopener noreferrer" data-copy="testLink">Open this message</a></div>
 <p class="status" id="share-status" role="status" aria-live="polite"></p>
+<button class="button secondary" type="button" id="show-qr" aria-expanded="false" aria-controls="qr-panel" data-copy="qrShow" hidden>Show QR code</button>
+<p class="field-help" id="qr-limit" data-copy="qrLimit" hidden>QR is for short, single links only (up to 256 URL bytes). Copy the link instead.</p>
+<section id="qr-panel" aria-labelledby="qr-title" hidden>
+<h3 id="qr-title" data-copy="qrTitle">Scan the encrypted link</h3>
+<img id="qr-image" class="share-qr" alt="QR code for this encrypted message link" aria-describedby="qr-help">
+<p class="field-help" id="qr-help" data-copy="qrHelp">Only the encrypted link is in this QR. Share the secret phrase separately.</p>
+<a class="button secondary" id="download-qr" download="BetterPrivacy-QR.svg" data-copy="qrDownload">Download QR (SVG)</a>
+</section>
+<p class="status" id="qr-status" role="status" aria-live="polite"></p>
 <ol class="generated-parts" id="generated-parts" aria-labelledby="generated-title" hidden></ol>
 <button class="button tertiary" type="button" id="start-over" data-copy="startOver">Write another message</button>
 <p class="fine" data-copy="noExpiry">This link doesn't expire. Anyone with the link and phrase can read it.</p>

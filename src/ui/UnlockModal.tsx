@@ -16,7 +16,7 @@
 import type { KeyEntry, PluginContext, Scope } from '../types'
 import { channelKeyLabel, friendlyKeyLabel } from './labels'
 import { t } from '../i18n'
-import { unlockIfCurrent } from '../core/session'
+import { unlockChannelKeys, unlockIfCurrent } from '../core/session'
 
 const modalOwners = new WeakMap<PluginContext, { stopped: boolean; cancels: Set<() => void> }>()
 
@@ -146,17 +146,23 @@ export function openUnlockModal(ctx: PluginContext, entry: KeyEntry): Promise<bo
       if (!life.current()) { life.cancel(); return }
       unlocking = true
       const phrase = phraseValue(passRef)
+      const scope = entry.scope
+      const channelId = scope === 'global' ? ctx.modules.SelectedChannelStore?.getChannelId?.() ?? null : scope
       void unlockIfCurrent(ctx.session, entry, phrase, life.current)
-        .then((ok) => {
+        .then(async (ok) => {
           if (life.settled()) return
           const saved = ctx.keyring.get(entry.id)
-          if (!life.current() || saved?.salt !== entry.salt || saved?.check !== entry.check) {
+          if (!life.current() || saved?.salt !== entry.salt || saved?.check !== entry.check || saved?.scope !== scope) {
             feedback('um.cancelled', 'info')
             settle(false)
             return
           }
           if (ok) {
-            try { BdApi.UI.showToast(t('um.unlocked', { label: entry.label }), { type: 'success' }) } catch { /* best effort */ }
+            ctx.forceRerender()
+            const n = await unlockChannelKeys(ctx, channelId, phrase, entry.id, life.current)
+            if (!life.current() || !ctx.session.isUnlocked(entry.id)) { life.cancel(); return }
+            try { BdApi.UI.showToast(t('um.unlockedCount', { n }), { type: 'success' }) } catch { /* best effort */ }
+            ctx.forceRerender()
             settle(true)
           } else {
             feedback('um.wrongPassphrase', 'error')
@@ -285,6 +291,12 @@ export function openChannelPhraseModal(
           ctx.keyring.setActiveSendKey(channelId, entry.id)
           ctx.keyring.setEncryptMode(channelId, true)
           BdApi.UI.showToast(t('pm.channelEncrypted'), { type: 'success' })
+          ctx.forceRerender()
+          const n = await unlockChannelKeys(ctx, channelId, phrase, entry.id, life.current)
+          if (!life.current() || !ctx.session.isUnlocked(entry.id)) { life.cancel(); return }
+          if (n > 1) {
+            try { BdApi.UI.showToast(t('um.unlockedCount', { n }), { type: 'success' }) } catch { /* best effort */ }
+          }
           ctx.forceRerender()
           settle(entry)
         } catch (err: any) {
@@ -449,7 +461,11 @@ export function openRecoverKeyModal(
           const unlocked = await unlockIfCurrent(ctx.session, entry, phrase, life.current)
           if (!life.current()) { life.cancel(); return }
           if (unlocked) {
-            BdApi.UI.showToast(t('rm.accepted'), { type: 'success' })
+            ctx.forceRerender()
+            const batchChannel = channelId ?? ctx.modules.SelectedChannelStore?.getChannelId?.() ?? null
+            const n = await unlockChannelKeys(ctx, batchChannel, phrase, entry.id, life.current)
+            if (!life.current() || !ctx.session.isUnlocked(entry.id)) { life.cancel(); return }
+            try { BdApi.UI.showToast(t('um.unlockedCount', { n }), { type: 'success' }) } catch { /* best effort */ }
             ctx.forceRerender()
           }
           settle(unlocked)

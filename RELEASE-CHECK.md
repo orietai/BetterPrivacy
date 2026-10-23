@@ -43,6 +43,9 @@ plugin disable/enable cycle before proceeding with the full checklist below.
   phrase reveals no plaintext.
 - [ ] Switch sending keys, pause/resume encryption, lock keys, change channels,
   and disable/re-enable the plugin. Check indicators and decrypted previews.
+  With multiple saved keys, one phrase should open matching history keys in
+  that channel without changing the sending key. Locking during the scan must
+  cancel remaining attempts.
 - [ ] Edit an encrypted message, including after changing the sending key or
   pausing encryption. The editor must start with decrypted text, not the URL,
   and save encrypted with its original key. Cancel or lock while editing:
@@ -62,6 +65,9 @@ plugin disable/enable cycle before proceeding with the full checklist below.
   A malformed link or a part using a different phrase must reveal no combined text.
 - [ ] Test per-part copying, bulk copying, clipboard fallback, and native mobile
   sharing. The secret phrase must not appear in the shared payload.
+- [ ] Scan a short-message QR with a phone and open it using the phrase. Check
+  the downloaded QR too. Editing the draft or starting over must remove the
+  old QR; multipart results must retain their normal copy/share controls.
 - [ ] Check the deployed `/`, `/create/`, `/m`, `/m/`, `/terms/`, and
   `/BetterPrivacy.plugin.js` routes over HTTPS. Redirects must preserve the URL
   fragment; the plugin download must serve JavaScript, not an HTML fallback.

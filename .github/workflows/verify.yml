@@ -17,4 +17,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify:release
+      - run: git diff --exit-code -- site/assets/qr-vendor.js site/assets/qr-LICENSE.txt
       - run: npm audit --audit-level=low

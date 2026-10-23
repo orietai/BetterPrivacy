@@ -46,6 +46,14 @@
     pasteLabel: ['BetterPrivacy bağlantıları', 'Ссылки BetterPrivacy'], pasteCta: ['Bağlantıları yükle', 'Загрузить ссылки'], pasteHelp: ['Bir veya daha fazla tam bağlantıyı mesaj sırasıyla yapıştır. Parçalar yapıştırdığın sırayla birleştirilir; eksik parçalar tespit edilemez.', 'Вставьте одну или несколько полных ссылок в порядке сообщения. Части объединяются в порядке вставки; пропущенные части определить невозможно.'], newMessage: ['Sen de özel bir mesaj oluştur.', 'Создайте своё приватное сообщение.'], hideMessage: ['Mesajı gizle', 'Скрыть сообщение']
   };
   var messages = {
+    qrShow: ['Show QR code', 'QR kodunu göster', 'Показать QR-код'],
+    qrHide: ['Hide QR code', 'QR kodunu gizle', 'Скрыть QR-код'],
+    qrTitle: ['Scan the encrypted link', 'Şifreli bağlantıyı tara', 'Сканируйте зашифрованную ссылку'],
+    qrAlt: ['QR code for this encrypted message link', 'Bu şifreli mesaj bağlantısının QR kodu', 'QR-код ссылки на это зашифрованное сообщение'],
+    qrHelp: ['Only the encrypted link is in this QR. Share the secret phrase separately.', 'QR yalnızca şifreli bağlantıyı içerir. Gizli ifadeyi ayrı paylaş.', 'QR содержит только зашифрованную ссылку. Передайте секретную фразу отдельно.'],
+    qrDownload: ['Download QR (SVG)', 'QR indir (SVG)', 'Скачать QR (SVG)'],
+    qrLimit: ['QR is for short, single links only (up to 256 URL bytes). Copy the link instead.', 'QR yalnızca kısa, tek bağlantılar içindir (en fazla 256 URL baytı). Bağlantıyı kopyala.', 'QR доступен для коротких одиночных ссылок (до 256 байт URL). Скопируйте ссылку.'],
+    qrFailed: ['QR could not be created. Copy the encrypted link instead.', 'QR oluşturulamadı. Şifreli bağlantıyı kopyala.', 'Не удалось создать QR. Скопируйте зашифрованную ссылку.'],
     messageEmpty: ['Write a message first.', 'Önce bir mesaj yaz.', 'Сначала напишите сообщение.'],
     bytesLabel: ['bytes', 'bayt', 'байт'],
     linkCount: ['link', 'bağlantı', 'ссылка'],

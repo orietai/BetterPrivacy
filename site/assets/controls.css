@@ -63,6 +63,7 @@
 .generated-parts > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 0; border-top: 1px solid rgba(237,239,242,.12); }
 .generated-parts > li > p { margin: 0; font-variant-numeric: tabular-nums; }
 .generated-parts .actions { margin: 0; }
+.share-qr { display: block; width: 320px; max-width: 100%; height: auto; background: #fff; margin: 16px 0; }
 .reader-workspace .cta { margin-top: 22px; }
 @media (hover: hover) and (pointer: fine) {
   .button:hover:not(:disabled) { background: #71cd92; text-decoration: none; }
